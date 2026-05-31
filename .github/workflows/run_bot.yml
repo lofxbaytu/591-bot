@@ -1,0 +1,51 @@
+name: Run 591 Telegram Bot
+
+on:
+  schedule:
+    # 每天 UTC 時間 12:00 執行一次 (即台北時間 20:00)
+    - cron: '0 12 * * *'
+  workflow_dispatch: # 支援在 GitHub 網頁上手動點擊執行
+
+permissions:
+  contents: write # 允許 Actions 提交 seen_listings.json 紀錄回儲存庫
+
+jobs:
+  run-bot:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        persist-credentials: true
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.10'
+        cache: 'pip'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install requests
+
+    - name: Run Bot
+      env:
+        # 自 GitHub Secrets 中安全讀取 Telegram 憑證，不公開在程式碼中
+        TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+        TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        # 搜尋篩選設定 (亦可寫在此處，方便隨時修改)
+        REGION: 1 # 台北市
+        KIND: 0 # 全部房源
+        RENTPRICE_MAX: 30000
+        RUN_ONCE: "True"
+      run: python bot.py
+
+    - name: Commit and Push changes
+      run: |
+        git config --global user.name "github-actions[bot]"
+        git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+        git add seen_listings.json || true
+        git commit -m "chore: update seen listings database [skip ci]" || true
+        git push || true

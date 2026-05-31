@@ -1,0 +1,13 @@
+# 忽略包含實體 Token 的本地設定檔
+config.json
+
+# Python 快取與編譯檔案
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# 本地虛擬環境
+venv/
+.venv/
+env/
