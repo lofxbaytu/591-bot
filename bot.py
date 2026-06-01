@@ -145,7 +145,12 @@ def send_telegram_notification(token, chat_id, house_info):
         f"🔗 <a href='{url}'>點此查看 591 房屋詳情</a>"
     )
     
-    photo_url = house_info.get('cover') or house_info.get('photo_list', [None])[0]
+    photo_url = house_info.get('cover')
+    if not photo_url:
+        photo_list = house_info.get('photo_list')
+        if photo_list and isinstance(photo_list, list) and len(photo_list) > 0:
+            photo_url = photo_list[0]
+            
     base_url = f"https://api.telegram.org/bot{token}"
     
     if photo_url:
@@ -159,7 +164,7 @@ def send_telegram_notification(token, chat_id, house_info):
         try:
             res = requests.post(send_photo_url, json=payload, timeout=10)
             if res.status_code == 200:
-                print(f"[✓] Sent photo notification for house ID: {post_id}")
+                print(f"[OK] Sent photo notification for house ID: {post_id}")
                 return True
         except Exception as e:
             print(f"[!] Error sending photo: {e}, falling back to sendMessage.")
@@ -207,7 +212,11 @@ def get_591_listings(session, config, target):
         
         csrf_token = csrf_match.group(1)
         
-        new_session_val = session.cookies.get('591_new_session')
+        new_session_val = None
+        for cookie in session.cookies:
+            if cookie.name == '591_new_session':
+                new_session_val = cookie.value
+                break
         if new_session_val:
             session.cookies.set('591_new_session', new_session_val, domain='.591.com.tw')
         
