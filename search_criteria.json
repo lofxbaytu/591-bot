@@ -1,6 +1,6 @@
 {
     "rentprice_min": 0,
-    "rentprice_max": 30000,
+    "rentprice_max": 35000,
     "targets": [
         {
             "region": 1,
