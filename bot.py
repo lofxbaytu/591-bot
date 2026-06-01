@@ -177,14 +177,12 @@ def get_591_listings(session, config):
 
     # Step 1: Visit main site to obtain base session cookies and CSRF token
     try:
-        main_url = 'https://rent.591.com.tw/'
-        # Add region parameters to main page visit to match search state
-        params = {'region': region}
+        main_url = 'https://www.591.com.tw/'
         
         # Set urlJumpIp cookie directly to force chosen region state in 591 session
         session.cookies.set('urlJumpIp', str(region), domain='.591.com.tw')
         
-        response = session.get(main_url, headers=headers, params=params, timeout=15)
+        response = session.get(main_url, headers=headers, timeout=15)
         
         if response.status_code != 200:
             print(f"[ERROR] Failed to fetch 591 homepage: HTTP {response.status_code}")
@@ -197,6 +195,11 @@ def get_591_listings(session, config):
             return []
         
         csrf_token = csrf_match.group(1)
+        
+        # Copy 591_new_session to the wildcard domain so it is sent to rent.591.com.tw
+        new_session_val = session.cookies.get('591_new_session')
+        if new_session_val:
+            session.cookies.set('591_new_session', new_session_val, domain='.591.com.tw')
         
     except Exception as e:
         print(f"[ERROR] Exception occurred during session initiation: {e}")
