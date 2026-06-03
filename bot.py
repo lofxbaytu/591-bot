@@ -73,6 +73,7 @@ def load_criteria():
         "not_cover": 0,
         "lift": 0,
         "balcony_1": 0,
+        "exclude_keywords": ["林森北路"],
         "other_params": {}
     }
     
@@ -86,6 +87,8 @@ def load_criteria():
                         if "kind" in t:
                             kinds.add(t["kind"])
                     criteria["kinds"] = list(kinds) if kinds else [0]
+                if "exclude_keywords" not in criteria:
+                    criteria["exclude_keywords"] = ["林森北路"]
                 return criteria
         except Exception as e:
             print(f"[!] Warning: Failed to parse search criteria, using default: {e}")
@@ -465,6 +468,9 @@ def render_menu(criteria, menu_name):
         lift_desc = "✅ 限制必須有電梯" if criteria.get("lift", 0) == 1 else "❌ 不限制電梯"
         balcony_desc = "✅ 限制必須有陽台" if criteria.get("balcony_1", 0) == 1 else "❌ 不限制陽台"
         
+        exclude_list = criteria.get("exclude_keywords", [])
+        exclude_desc = ", ".join(exclude_list) if exclude_list else "無"
+        
         text = (
             f"⚙️ <b>目前篩選條件設定</b>\n\n"
             f"💰 <b>租金上限：</b> {criteria.get('rentprice_max', 0):,} 元/月\n"
@@ -472,7 +478,8 @@ def render_menu(criteria, menu_name):
             f"🛠️ <b>進階篩選狀態：</b>\n"
             f"• {not_cover_desc}\n"
             f"• {lift_desc}\n"
-            f"• {balcony_desc}\n\n"
+            f"• {balcony_desc}\n"
+            f"• 🚫 <b>排除字詞：</b> {exclude_desc}\n\n"
             f"💡 點選下方按鈕即可即時切換或進入子選單設定。"
         )
         
@@ -785,7 +792,36 @@ def process_telegram_commands(token, chat_id, criteria, state):
                 except Exception as e:
                     reply_text = f"❌ <b>設定失敗</b>: {e}"
                     
-            # 4. /status or /狀態
+            # 4. /exclude or /排除
+            elif text.startswith("/exclude") or text.startswith("/排除"):
+                parts = text.split(maxsplit=1)
+                exclude_list = criteria.setdefault("exclude_keywords", ["林森北路"])
+                
+                if len(parts) < 2:
+                    exclude_desc = ", ".join(exclude_list) if exclude_list else "無"
+                    reply_text = (
+                        f"🚫 <b>目前排除字詞：</b> {exclude_desc}\n\n"
+                        f"💡 輸入 `/排除 <關鍵字>` 可以新增或移除排除關鍵字（例如：`/排除 林森北路`）"
+                    )
+                else:
+                    kw = parts[1].strip()
+                    if not kw:
+                        exclude_desc = ", ".join(exclude_list) if exclude_list else "無"
+                        reply_text = (
+                            f"🚫 <b>目前排除字詞：</b> {exclude_desc}\n\n"
+                            f"💡 輸入 `/排除 <關鍵字>` 可以新增或移除排除關鍵字（例如：`/排除 林森北路`）"
+                        )
+                    else:
+                        if kw in exclude_list:
+                            exclude_list.remove(kw)
+                            reply_text = f"⚙️ <b>設定成功</b>\n已移除排除字詞：{kw}"
+                        else:
+                            exclude_list.append(kw)
+                            reply_text = f"⚙️ <b>設定成功</b>\n已新增排除字詞：{kw}"
+                        criteria["exclude_keywords"] = exclude_list
+                        criteria_changed = True
+                        
+            # 5. /status or /狀態
             elif text == "/status" or text == "/狀態":
                 reply_text, keyboard = render_menu(criteria, "main")
                 
@@ -812,6 +848,7 @@ def process_telegram_commands(token, chat_id, criteria, state):
                     "not_cover": criteria.get("not_cover", 0),
                     "lift": criteria.get("lift", 0),
                     "balcony_1": criteria.get("balcony_1", 0),
+                    "exclude_keywords": criteria.get("exclude_keywords", ["林森北路"]),
                     "other_params": criteria.get("other_params", {})
                 }
                 with open(CRITERIA_PATH, 'w', encoding='utf-8') as f:
@@ -887,6 +924,8 @@ def main():
             # Make sure we persist latest config state locally
             state["seen_ids"] = seen_listings
             save_seen_listings(state)
+            last_scrape_time = 0  # Force immediate scrape on criteria change
+            
             
         # 2. Check if it's time to query 591
         now = time.time()
@@ -935,6 +974,29 @@ def main():
                     
                     if post_id not in seen_listings:
                         seen_listings.add(post_id)
+                        
+                        # Check exclude keywords
+                        exclude_list = config.get("exclude_keywords", [])
+                        should_exclude = False
+                        matched_kw = ""
+                        check_text = (
+                            f"{listing.get('title') or ''} "
+                            f"{listing.get('name') or ''} "
+                            f"{listing.get('address') or ''} "
+                            f"{listing.get('location') or ''} "
+                            f"{listing.get('section_name') or ''} "
+                            f"{listing.get('street_name') or ''}"
+                        )
+                        for kw in exclude_list:
+                            if kw and kw in check_text:
+                                should_exclude = True
+                                matched_kw = kw
+                                break
+                                
+                        if should_exclude:
+                            print(f"[!] Excluded listing {post_id} containing keyword: '{matched_kw}'")
+                            continue
+                            
                         new_listings_count += 1
                         
                         if not is_first_run:
