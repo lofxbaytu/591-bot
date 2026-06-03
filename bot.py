@@ -62,7 +62,6 @@ def load_criteria():
         except Exception as e:
             print(f"[!] Warning: Failed to parse search criteria, using default: {e}")
 
-    # Default criteria: Taipei City (all) + New Taipei City (板橋, 汐止, 永和, 三重)
     default_criteria = {
         "rentprice_min": 0,
         "rentprice_max": 30000,
@@ -77,6 +76,9 @@ def load_criteria():
                 "kind": 0
             }
         ],
+        "not_cover": 0,
+        "lift": 0,
+        "balcony_1": 0,
         "other_params": {}
     }
     try:
@@ -246,10 +248,19 @@ def get_591_listings(session, config, target):
     if section:
         api_params['section'] = str(section)
 
+    # Global search config parameters
     min_price = config.get("rentprice_min", 0)
     max_price = config.get("rentprice_max", 0)
     if max_price > 0:
         api_params['rentprice'] = f"{min_price},{max_price}"
+
+    # Advanced options mapping
+    if config.get("not_cover") == 1:
+        api_params['not_cover'] = '1'
+    if config.get("lift") == 1:
+        api_params['lift'] = '1'
+    if config.get("balcony_1") == 1:
+        api_params['balcony_1'] = '1'
 
     if config.get("other_params"):
         api_params.update(config.get("other_params"))
@@ -280,13 +291,194 @@ def get_591_listings(session, config, target):
         print(f"[ERROR] Exception during API request: {e}")
         return []
 
+def render_menu(criteria, menu_name):
+    """
+    Renders the text and inline keyboard markup for the specified menu.
+    menu_name: 'main', 'region', 'price', 'kind'
+    """
+    district_map = {"26": "板橋", "27": "汐止", "37": "永和", "43": "三重"}
+    kind_map_desc = {0: "全部", 1: "整層住家", 2: "獨立套房", 3: "分租套房", 4: "雅房"}
+    
+    if menu_name == "region":
+        # Helper to check active status of each area
+        taipei_active = any(t.get("region") == 1 for t in criteria.get("targets", []))
+        
+        npt_targets = [t for t in criteria.get("targets", []) if t.get("region") == 3]
+        npt_sections = []
+        if npt_targets:
+            npt_sections = npt_targets[0].get("section", "").split(",")
+            
+        banqiao_active = "26" in npt_sections
+        xizhi_active = "27" in npt_sections
+        yonghe_active = "37" in npt_sections
+        sanchong_active = "43" in npt_sections
+        
+        text = (
+            "📍 <b>地區設定選單</b>\n\n"
+            "請點選以下按鈕啟用或停用要搜尋的地區（顯示 🟢 代表啟用中，🔴 代表停用中）。\n"
+            "變更後系統會即時儲存設定並套用。\n"
+        )
+        
+        keyboard = {
+            "inline_keyboard": [
+                [
+                    {"text": f"台北市: {'🟢 啟用' if taipei_active else '🔴 停用'}", "callback_data": "toggle_reg_1"}
+                ],
+                [
+                    {"text": f"板橋區: {'🟢 啟用' if banqiao_active else '🔴 停用'}", "callback_data": "toggle_sec_26"},
+                    {"text": f"三重區: {'🟢 啟用' if sanchong_active else '🔴 停用'}", "callback_data": "toggle_sec_43"}
+                ],
+                [
+                    {"text": f"永和區: {'🟢 啟用' if yonghe_active else '🔴 停用'}", "callback_data": "toggle_sec_37"},
+                    {"text": f"汐止區: {'🟢 啟用' if xizhi_active else '🔴 停用'}", "callback_data": "toggle_sec_27"}
+                ],
+                [
+                    {"text": "🔙 返回主選單", "callback_data": "menu_main"}
+                ]
+            ]
+        }
+        return text, keyboard
+        
+    elif menu_name == "price":
+        current_max = criteria.get("rentprice_max", 30000)
+        text = (
+            f"💰 <b>租金上限設定選單</b>\n\n"
+            f"目前租金上限：<b>{current_max:,}</b> 元/月\n\n"
+            f"💡 您可以透過點選下方按鈕直接進行微調或快速設定，或直接在對話框輸入 `/租金 <金額>` 設定特定數值。"
+        )
+        keyboard = {
+            "inline_keyboard": [
+                [
+                    {"text": "➖ 1,000 元", "callback_data": "adj_price_-1000"},
+                    {"text": "➕ 1,000 元", "callback_data": "adj_price_1000"}
+                ],
+                [
+                    {"text": "➖ 5,000 元", "callback_data": "adj_price_-5000"},
+                    {"text": "➕ 5,000 元", "callback_data": "adj_price_5000"}
+                ],
+                [
+                    {"text": "💵 15k", "callback_data": "set_price_15000"},
+                    {"text": "💵 20k", "callback_data": "set_price_20000"},
+                    {"text": "💵 25k", "callback_data": "set_price_25000"}
+                ],
+                [
+                    {"text": "💵 30k", "callback_data": "set_price_30000"},
+                    {"text": "💵 35k", "callback_data": "set_price_35000"},
+                    {"text": "💵 40k", "callback_data": "set_price_40000"}
+                ],
+                [
+                    {"text": "🔙 返回主選單", "callback_data": "menu_main"}
+                ]
+            ]
+        }
+        return text, keyboard
+        
+    elif menu_name == "kind":
+        current_kind = 0
+        if criteria.get("targets"):
+            current_kind = criteria["targets"][0].get("kind", 0)
+            
+        kind_desc = kind_map_desc.get(current_kind, "未知")
+        text = (
+            f"🏠 <b>房屋類型設定選單</b>\n\n"
+            f"目前搜尋類型：<b>{kind_desc}</b>\n\n"
+            f"請點選以下按鈕變更搜尋類型（這會套用到所有搜尋地區）："
+        )
+        
+        def btn_text(name, val):
+            return f"🟢 {name}" if current_kind == val else f"⚪ {name}"
+            
+        keyboard = {
+            "inline_keyboard": [
+                [
+                    {"text": btn_text("全部房源", 0), "callback_data": "set_kind_0"}
+                ],
+                [
+                    {"text": btn_text("整層住家", 1), "callback_data": "set_kind_1"},
+                    {"text": btn_text("獨立套房", 2), "callback_data": "set_kind_2"}
+                ],
+                [
+                    {"text": btn_text("分租套房", 3), "callback_data": "set_kind_3"},
+                    {"text": btn_text("雅房", 4), "callback_data": "set_kind_4"}
+                ],
+                [
+                    {"text": "🔙 返回主選單", "callback_data": "menu_main"}
+                ]
+            ]
+        }
+        return text, keyboard
+        
+    else:  # 'main' menu
+        target_descs = []
+        for t in criteria.get("targets", []):
+            kind_desc = kind_map_desc.get(t.get("kind", 0), "未知")
+            if t["region"] == 1:
+                target_descs.append(f"• 台北市 (全部) [{kind_desc}]")
+            elif t["region"] == 3:
+                sec_names = [district_map.get(sid, sid) for sid in t.get("section", "").split(",") if sid]
+                target_descs.append(f"• 新北市 ({', '.join(sec_names)}) [{kind_desc}]")
+                
+        if not target_descs:
+            target_descs.append("• ⚠️ 未設定搜尋地區（請點選下方按鈕修改地區）")
+                
+        not_cover_status = "🟢 開" if criteria.get("not_cover", 0) == 1 else "🔴 關"
+        lift_status = "🟢 開" if criteria.get("lift", 0) == 1 else "🔴 關"
+        balcony_status = "🟢 開" if criteria.get("balcony_1", 0) == 1 else "🔴 關"
+        
+        not_cover_desc = "✅ 已排除頂樓加蓋" if criteria.get("not_cover", 0) == 1 else "❌ 未排除頂樓加蓋"
+        lift_desc = "✅ 限制必須有電梯" if criteria.get("lift", 0) == 1 else "❌ 不限制電梯"
+        balcony_desc = "✅ 限制必須有陽台" if criteria.get("balcony_1", 0) == 1 else "❌ 不限制陽台"
+        
+        text = (
+            f"⚙️ <b>目前篩選條件設定</b>\n\n"
+            f"💰 <b>租金上限：</b> {criteria.get('rentprice_max', 0):,} 元/月\n"
+            f"📍 <b>監控地區：</b>\n" + "\n".join(target_descs) + "\n\n"
+            f"🛠️ <b>進階篩選狀態：</b>\n"
+            f"• {not_cover_desc}\n"
+            f"• {lift_desc}\n"
+            f"• {balcony_desc}\n\n"
+            f"💡 點選下方按鈕即可即時切換或進入子選單設定。"
+        )
+        
+        keyboard = {
+            "inline_keyboard": [
+                [
+                    {"text": f"📶 排除頂加: {not_cover_status}", "callback_data": "toggle_not_cover"}
+                ],
+                [
+                    {"text": f"🛗 有電梯: {lift_status}", "callback_data": "toggle_lift"},
+                    {"text": f"☀️ 有陽台: {balcony_status}", "callback_data": "toggle_balcony"}
+                ],
+                [
+                    {"text": "📍 地區設定", "callback_data": "menu_region"},
+                    {"text": "💰 租金設定", "callback_data": "menu_price"}
+                ],
+                [
+                    {"text": "🏠 類型設定", "callback_data": "menu_kind"},
+                    {"text": "🔄 重新整理", "callback_data": "menu_main"}
+                ]
+            ]
+        }
+        return text, keyboard
+
+def make_status_keyboard(criteria):
+    """Generates inline keyboard markup for settings control."""
+    _, keyboard = render_menu(criteria, "main")
+    return keyboard
+
+def make_status_text(criteria):
+    """Generates standard status description text."""
+    text, _ = render_menu(criteria, "main")
+    return text
+
+
 def process_telegram_commands(token, chat_id, criteria, state):
-    """Fetches new Telegram messages and updates search criteria accordingly."""
+    """Fetches new Telegram messages & callback queries, updating configurations."""
     last_update_id = state.get("last_update_id", 0)
     base_url = f"https://api.telegram.org/bot{token}"
     get_updates_url = f"{base_url}/getUpdates"
     
-    params = {"timeout": 5}
+    params = {"timeout": 3}
     if last_update_id > 0:
         params["offset"] = last_update_id + 1
         
@@ -314,11 +506,141 @@ def process_telegram_commands(token, chat_id, criteria, state):
             if update_id:
                 latest_update_id = max(latest_update_id, update_id)
                 
+            # A. Process Callback Queries (Button Click Actions)
+            callback_query = update.get("callback_query")
+            if callback_query:
+                sender_id = callback_query.get("from", {}).get("id")
+                if str(sender_id) != str(chat_id):
+                    continue
+                    
+                cq_id = callback_query.get("id")
+                data = callback_query.get("data", "")
+                msg = callback_query.get("message", {})
+                msg_id = msg.get("message_id")
+                
+                alert_text = ""
+                active_menu = "main"
+                
+                if data == "menu_main":
+                    active_menu = "main"
+                    alert_text = "已返回主選單"
+                elif data == "menu_region":
+                    active_menu = "region"
+                    alert_text = "載入地區設定選單"
+                elif data == "menu_price":
+                    active_menu = "price"
+                    alert_text = "載入租金設定選單"
+                elif data == "menu_kind":
+                    active_menu = "kind"
+                    alert_text = "載入房屋類型選單"
+                elif data == "toggle_not_cover":
+                    current = criteria.get("not_cover", 0)
+                    criteria["not_cover"] = 1 if current == 0 else 0
+                    alert_text = "已排除頂加" if criteria["not_cover"] == 1 else "已取消排除頂加"
+                    active_menu = "main"
+                elif data == "toggle_lift":
+                    current = criteria.get("lift", 0)
+                    criteria["lift"] = 1 if current == 0 else 0
+                    alert_text = "限制必須有電梯" if criteria["lift"] == 1 else "取消電梯限制"
+                    active_menu = "main"
+                elif data == "toggle_balcony":
+                    current = criteria.get("balcony_1", 0)
+                    criteria["balcony_1"] = 1 if current == 0 else 0
+                    alert_text = "限制必須有陽台" if criteria["balcony_1"] == 1 else "取消陽台限制"
+                    active_menu = "main"
+                elif data == "toggle_reg_1":
+                    active_menu = "region"
+                    current_kind = 0
+                    if criteria.get("targets"):
+                        current_kind = criteria["targets"][0].get("kind", 0)
+                    targets = criteria.get("targets", [])
+                    t_taipei = [t for t in targets if t.get("region") == 1]
+                    if t_taipei:
+                        targets = [t for t in targets if t.get("region") != 1]
+                        alert_text = "已停用台北市搜尋"
+                    else:
+                        targets.append({"region": 1, "kind": current_kind})
+                        alert_text = "已啟用台北市搜尋"
+                    criteria["targets"] = targets
+                elif data.startswith("toggle_sec_"):
+                    active_menu = "region"
+                    sec_id = data.split("_")[-1]
+                    current_kind = 0
+                    if criteria.get("targets"):
+                        current_kind = criteria["targets"][0].get("kind", 0)
+                    targets = criteria.get("targets", [])
+                    t_npt = [t for t in targets if t.get("region") == 3]
+                    district_names = {"26": "板橋區", "27": "汐止區", "37": "永和區", "43": "三重區"}
+                    d_name = district_names.get(sec_id, sec_id)
+                    
+                    if t_npt:
+                        target_npt = t_npt[0]
+                        sections = [s for s in target_npt.get("section", "").split(",") if s]
+                        if sec_id in sections:
+                            sections.remove(sec_id)
+                            alert_text = f"已停用 {d_name} 搜尋"
+                        else:
+                            sections.append(sec_id)
+                            alert_text = f"已啟用 {d_name} 搜尋"
+                        if sections:
+                            target_npt["section"] = ",".join(sections)
+                        else:
+                            targets = [t for t in targets if t.get("region") != 3]
+                    else:
+                        targets.append({"region": 3, "section": sec_id, "kind": current_kind})
+                        alert_text = f"已啟用 {d_name} 搜尋"
+                    criteria["targets"] = targets
+                elif data.startswith("adj_price_"):
+                    active_menu = "price"
+                    val = int(data.split("_")[-1])
+                    current_max = criteria.get("rentprice_max", 30000)
+                    new_max = max(0, current_max + val)
+                    criteria["rentprice_max"] = new_max
+                    alert_text = f"租金上限調整為：{new_max:,} 元"
+                elif data.startswith("set_price_"):
+                    active_menu = "price"
+                    val = int(data.split("_")[-1])
+                    criteria["rentprice_max"] = val
+                    alert_text = f"租金上限設定為：{val:,} 元"
+                elif data.startswith("set_kind_"):
+                    active_menu = "kind"
+                    kind_val = int(data.split("_")[-1])
+                    for t in criteria.get("targets", []):
+                        t["kind"] = kind_val
+                    kind_names = {0: "全部房源", 1: "整層住家", 2: "獨立套房", 3: "分租套房", 4: "雅房"}
+                    alert_text = f"搜尋類型已切換為：{kind_names.get(kind_val)}"
+                    
+                # Answer callback immediately
+                ans_url = f"{base_url}/answerCallbackQuery"
+                requests.post(ans_url, json={
+                    "callback_query_id": cq_id,
+                    "text": alert_text,
+                    "show_alert": False
+                }, timeout=5)
+                
+                # Determine if criteria actually changed
+                is_change = not data.startswith("menu_")
+                if is_change:
+                    criteria_changed = True
+                    
+                # Re-render status text and update inline keyboard layout
+                status_text, status_keyboard = render_menu(criteria, active_menu)
+                edit_url = f"{base_url}/editMessageText"
+                payload = {
+                    "chat_id": chat_id,
+                    "message_id": msg_id,
+                    "text": status_text,
+                    "parse_mode": "HTML",
+                    "reply_markup": status_keyboard
+                }
+                requests.post(edit_url, json=payload, timeout=10)
+                continue
+
+            # B. Process Standard Text Commands
             message = update.get("message")
             if not message:
                 continue
                 
-            # Security check: verify message is from configured chat ID
             sender_id = message.get("chat", {}).get("id")
             if str(sender_id) != str(chat_id):
                 continue
@@ -328,6 +650,7 @@ def process_telegram_commands(token, chat_id, criteria, state):
                 continue
                 
             reply_text = ""
+            keyboard = None
             
             # 1. /price or /租金
             if text.startswith("/price ") or text.startswith("/租金 "):
@@ -376,9 +699,9 @@ def process_telegram_commands(token, chat_id, criteria, state):
                                 
                         reply_text = f"⚙️ <b>設定成功</b>\n搜尋地區已更新為：\n" + "\n".join(f"- {d}" for d in target_descs)
                     else:
-                        reply_text = "❌ <b>找不到匹配地區</b>\n支援的地區包含：台北、板橋、三重、永和、汐止。"
+                        reply_text = "❌ <b>找不到地區</b>\n支援的地區包含：台北、板橋、三重、永和、汐止。"
                 except Exception as e:
-                    reply_text = f"❌ <b>設定失敗</b>\n解析錯誤: {e}"
+                    reply_text = f"❌ <b>設定失敗</b>: {e}"
                     
             # 3. /kind or /類型
             elif text.startswith("/kind ") or text.startswith("/類型 "):
@@ -410,24 +733,7 @@ def process_telegram_commands(token, chat_id, criteria, state):
                     
             # 4. /status or /狀態
             elif text == "/status" or text == "/狀態":
-                target_descs = []
-                for t in criteria.get("targets", []):
-                    kind_desc = {0: "全部", 1: "整層住家", 2: "獨立套房", 3: "分租套房", 4: "雅房"}.get(t.get("kind", 0), "未知")
-                    if t["region"] == 1:
-                        target_descs.append(f"• 台北市 (全部) [{kind_desc}]")
-                    elif t["region"] == 3:
-                        sec_names = [d_name for d_name, d_id in district_map.items() if d_id in t.get("section", "").split(",")]
-                        target_descs.append(f"• 新北市 ({', '.join(sec_names)}) [{kind_desc}]")
-                        
-                reply_text = (
-                    f"⚙️ <b>目前篩選條件設定</b>\n\n"
-                    f"💰 <b>租金上限：</b> {criteria.get('rentprice_max', 0):,} 元/月\n"
-                    f"📍 <b>監控地區：</b>\n" + "\n".join(target_descs) + "\n\n"
-                    f"💡 <b>修改指令：</b>\n"
-                    f"修改租金： `/租金 25000`\n"
-                    f"修改地區： `/地區 台北,板橋,三重`\n"
-                    f"修改類型： `/類型 獨立套房`"
-                )
+                reply_text, keyboard = render_menu(criteria, "main")
                 
             if reply_text:
                 send_msg_url = f"{base_url}/sendMessage"
@@ -436,17 +742,21 @@ def process_telegram_commands(token, chat_id, criteria, state):
                     "text": reply_text,
                     "parse_mode": "HTML"
                 }
+                if keyboard:
+                    payload["reply_markup"] = keyboard
                 requests.post(send_msg_url, json=payload, timeout=10)
                 
         state["last_update_id"] = latest_update_id
         
         if criteria_changed:
             try:
-                # Save only the fields that belong to search_criteria
                 filtered_criteria = {
                     "rentprice_min": criteria.get("rentprice_min", 0),
                     "rentprice_max": criteria.get("rentprice_max", 30000),
                     "targets": criteria.get("targets", []),
+                    "not_cover": criteria.get("not_cover", 0),
+                    "lift": criteria.get("lift", 0),
+                    "balcony_1": criteria.get("balcony_1", 0),
                     "other_params": criteria.get("other_params", {})
                 }
                 with open(CRITERIA_PATH, 'w', encoding='utf-8') as f:
@@ -469,7 +779,7 @@ def main():
     config = load_config()
     criteria = load_criteria()
     
-    # Merge global configurations
+    # Merge configurations
     config.update(criteria)
     
     if (config.get("telegram_bot_token") == "YOUR_TELEGRAM_BOT_TOKEN" or 
@@ -482,22 +792,16 @@ def main():
     seen_listings = state["seen_ids"]
     print(f"[*] Loaded {len(seen_listings)} previously seen listings.")
     
-    # Process commands from Telegram chat
+    is_first_run = len(seen_listings) == 0
+    
     token = config["telegram_bot_token"]
     chat_id = config["telegram_chat_id"]
-    print("[*] Processing incoming Telegram commands...")
-    criteria_changed = process_telegram_commands(token, chat_id, config, state)
-    if criteria_changed:
-        # Re-apply merged settings if changed
-        criteria = load_criteria()
-        config.update(criteria)
-        
-    is_first_run = len(seen_listings) == 0
-    if is_first_run:
-        print("[*] First run: Bot will index current listings and start notifying on subsequent checks.")
-        
+    
     check_interval = config.get("check_interval_seconds", 86400)
     run_once = config.get("run_once", False) or ("--once" in sys.argv)
+    
+    # Daemon loop / Scheduling logic
+    last_scrape_time = 0
     
     targets_desc = []
     for t in config.get("targets", []):
@@ -512,68 +816,88 @@ def main():
     if run_once:
         print("[*] Running in single-check mode (Run Once).")
     else:
-        print(f"[*] Checking every {check_interval} seconds...")
+        print(f"[*] Command checking active. Scraper interval: {check_interval} seconds.")
     print("-" * 60)
 
     while True:
-        current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        print(f"[{current_time}] Fetching listings from 591...")
-        
-        all_listings = []
-        seen_post_ids = set()
-        
-        for target in config.get("targets", []):
-            print(f"[{current_time}] Fetching target: Region {target.get('region')} Section {target.get('section', 'All')}...")
-            target_listings = get_591_listings(session, config, target)
-            for item in target_listings:
-                post_id = item.get('post_id') or item.get('id')
-                if post_id and post_id not in seen_post_ids:
-                    seen_post_ids.add(post_id)
-                    all_listings.append(item)
-            time.sleep(2)
-            
-        if all_listings:
-            print(f"[{current_time}] Successfully fetched {len(all_listings)} combined listings.")
-            new_listings_count = 0
-            
-            for listing in reversed(all_listings):
-                post_id = listing.get('post_id') or listing.get('id')
-                if not post_id:
-                    continue
-                    
-                post_id = str(post_id)
-                
-                if post_id not in seen_listings:
-                    seen_listings.add(post_id)
-                    new_listings_count += 1
-                    
-                    if not is_first_run:
-                        send_telegram_notification(
-                            token=token,
-                            chat_id=chat_id,
-                            house_info=listing
-                        )
-                        time.sleep(1.5)
-            
-            # Save progress
+        # 1. Check for incoming Telegram commands (runs every loop iteration - 2 seconds)
+        criteria_changed = process_telegram_commands(token, chat_id, config, state)
+        if criteria_changed:
+            criteria = load_criteria()
+            config.update(criteria)
+            # Make sure we persist latest config state locally
             state["seen_ids"] = seen_listings
             save_seen_listings(state)
-            if is_first_run:
-                print(f"[{current_time}] Initialized seen listings with {new_listings_count} houses.")
-                is_first_run = False
-            else:
-                print(f"[{current_time}] Processed {new_listings_count} new listings.")
+            
+        # 2. Check if it's time to query 591
+        now = time.time()
+        should_scrape = False
+        
+        if run_once:
+            should_scrape = True
+        elif now - last_scrape_time >= check_interval:
+            should_scrape = True
+            
+        if should_scrape:
+            current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            print(f"[{current_time}] Fetching listings from 591...")
+            
+            all_listings = []
+            seen_post_ids = set()
+            
+            for target in config.get("targets", []):
+                print(f"[{current_time}] Fetching target: Region {target.get('region')} Section {target.get('section', 'All')}...")
+                target_listings = get_591_listings(session, config, target)
+                for item in target_listings:
+                    post_id = item.get('post_id') or item.get('id')
+                    if post_id and post_id not in seen_post_ids:
+                        seen_post_ids.add(post_id)
+                        all_listings.append(item)
+                time.sleep(2)
                 
-        else:
-            print(f"[{current_time}] Failed to fetch listings or no listings returned.")
+            if all_listings:
+                print(f"[{current_time}] Successfully fetched {len(all_listings)} combined listings.")
+                new_listings_count = 0
+                
+                for listing in reversed(all_listings):
+                    post_id = listing.get('post_id') or listing.get('id')
+                    if not post_id:
+                        continue
+                        
+                    post_id = str(post_id)
+                    
+                    if post_id not in seen_listings:
+                        seen_listings.add(post_id)
+                        new_listings_count += 1
+                        
+                        if not is_first_run:
+                            send_telegram_notification(
+                                token=token,
+                                chat_id=chat_id,
+                                house_info=listing
+                            )
+                            time.sleep(1.5)
+                
+                # Save progress
+                state["seen_ids"] = seen_listings
+                save_seen_listings(state)
+                if is_first_run:
+                    print(f"[{current_time}] Initialized seen listings with {new_listings_count} houses.")
+                    is_first_run = False
+                else:
+                    print(f"[{current_time}] Processed {new_listings_count} new listings.")
+                    
+            else:
+                print(f"[{current_time}] Failed to fetch listings or no listings returned.")
+                
+            last_scrape_time = now
             
         if run_once:
             print("[*] Single check complete. Exiting.")
             break
             
-        print(f"[*] Waiting {check_interval} seconds for next check...")
-        print("-" * 60)
-        time.sleep(check_interval)
+        # Poll Telegram every 2 seconds
+        time.sleep(2)
 
 if __name__ == '__main__':
     try:
