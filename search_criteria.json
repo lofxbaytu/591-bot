@@ -4,13 +4,16 @@
     "targets": [
         {
             "region": 1,
-            "kind": 0
+            "kind": 2
         },
         {
             "region": 3,
             "section": "26,27,37,43",
-            "kind": 0
+            "kind": 2
         }
     ],
+    "not_cover": 0,
+    "lift": 1,
+    "balcony_1": 1,
     "other_params": {}
 }

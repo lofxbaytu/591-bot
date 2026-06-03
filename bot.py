@@ -55,13 +55,6 @@ def load_config():
 
 def load_criteria():
     """Loads search criteria. Falls back to default if missing."""
-    if os.path.exists(CRITERIA_PATH):
-        try:
-            with open(CRITERIA_PATH, 'r', encoding='utf-8') as f:
-                return json.load(f)
-        except Exception as e:
-            print(f"[!] Warning: Failed to parse search criteria, using default: {e}")
-
     default_criteria = {
         "rentprice_min": 0,
         "rentprice_max": 30000,
@@ -76,11 +69,27 @@ def load_criteria():
                 "kind": 0
             }
         ],
+        "kinds": [0],
         "not_cover": 0,
         "lift": 0,
         "balcony_1": 0,
         "other_params": {}
     }
+    
+    if os.path.exists(CRITERIA_PATH):
+        try:
+            with open(CRITERIA_PATH, 'r', encoding='utf-8') as f:
+                criteria = json.load(f)
+                if "kinds" not in criteria:
+                    kinds = set()
+                    for t in criteria.get("targets", []):
+                        if "kind" in t:
+                            kinds.add(t["kind"])
+                    criteria["kinds"] = list(kinds) if kinds else [0]
+                return criteria
+        except Exception as e:
+            print(f"[!] Warning: Failed to parse search criteria, using default: {e}")
+
     try:
         with open(CRITERIA_PATH, 'w', encoding='utf-8') as f:
             json.dump(default_criteria, f, indent=4, ensure_ascii=False)
@@ -117,13 +126,42 @@ def save_seen_listings(state):
     except Exception as e:
         print(f"[ERROR] Failed to save seen listings: {e}")
 
+def get_correct_area(post_id, default_area):
+    """Fetches the detail page for a post and extracts the correct area in 坪."""
+    url = f"https://rent.591.com.tw/rent-detail-{post_id}.html"
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    }
+    try:
+        res = requests.get(url, headers=headers, timeout=10)
+        if res.status_code == 200:
+            match = re.search(r'"使用坪數"\s*,\s*"([\d\.]+)\s*坪"', res.text)
+            if not match:
+                match = re.search(r'"坪數"\s*,\s*"([\d\.]+)\s*坪"', res.text)
+            if not match:
+                match = re.search(r'([\d\.]+)\s*坪', res.text)
+            if match:
+                return match.group(1)
+    except Exception as e:
+        print(f"[!] Error fetching correct area for {post_id}: {e}")
+    
+    try:
+        val = float(default_area)
+        if val > 100:
+            return f"{round(val / 10 * 0.3025, 2)} (估)"
+        else:
+            return str(default_area)
+    except Exception:
+        return str(default_area)
+
 def send_telegram_notification(token, chat_id, house_info):
     """Sends notification to Telegram via Bot API, preferring photo format if available."""
     post_id = house_info.get('post_id') or house_info.get('id')
     title = escape_html(house_info.get('title') or house_info.get('name') or "無標題")
     price = house_info.get('price', '未提供')
     price_unit = house_info.get('price_unit', '元/月')
-    area = house_info.get('area', '未提供')
+    raw_area = house_info.get('area', '未提供')
+    area = get_correct_area(post_id, raw_area)
     room_str = escape_html(house_info.get('room_str') or house_info.get('layout') or house_info.get('kind_name', '未提供格局'))
     floor_str = escape_html(house_info.get('floor_str') or house_info.get('floor') or '未提供樓層')
     
@@ -300,7 +338,6 @@ def render_menu(criteria, menu_name):
     kind_map_desc = {0: "全部", 1: "整層住家", 2: "獨立套房", 3: "分租套房", 4: "雅房"}
     
     if menu_name == "region":
-        # Helper to check active status of each area
         taipei_active = any(t.get("region") == 1 for t in criteria.get("targets", []))
         
         npt_targets = [t for t in criteria.get("targets", []) if t.get("region") == 3]
@@ -374,19 +411,16 @@ def render_menu(criteria, menu_name):
         return text, keyboard
         
     elif menu_name == "kind":
-        current_kind = 0
-        if criteria.get("targets"):
-            current_kind = criteria["targets"][0].get("kind", 0)
-            
-        kind_desc = kind_map_desc.get(current_kind, "未知")
+        current_kinds = criteria.get("kinds", [0])
+        kind_desc = ", ".join(kind_map_desc.get(k, "未知") for k in current_kinds)
         text = (
-            f"🏠 <b>房屋類型設定選單</b>\n\n"
+            f"🏠 <b>房屋類型設定選單（可複選）</b>\n\n"
             f"目前搜尋類型：<b>{kind_desc}</b>\n\n"
-            f"請點選以下按鈕變更搜尋類型（這會套用到所有搜尋地區）："
+            f"請點選以下按鈕啟用或停用搜尋類型（變更後系統會即時儲存設定並套用）："
         )
         
         def btn_text(name, val):
-            return f"🟢 {name}" if current_kind == val else f"⚪ {name}"
+            return f"🟢 {name}" if val in current_kinds else f"⚪ {name}"
             
         keyboard = {
             "inline_keyboard": [
@@ -410,8 +444,10 @@ def render_menu(criteria, menu_name):
         
     else:  # 'main' menu
         target_descs = []
+        current_kinds = criteria.get("kinds", [0])
+        kind_desc = ", ".join(kind_map_desc.get(k, "未知") for k in current_kinds)
+        
         for t in criteria.get("targets", []):
-            kind_desc = kind_map_desc.get(t.get("kind", 0), "未知")
             if t["region"] == 1:
                 target_descs.append(f"• 台北市 (全部) [{kind_desc}]")
             elif t["region"] == 3:
@@ -550,9 +586,8 @@ def process_telegram_commands(token, chat_id, criteria, state):
                     active_menu = "main"
                 elif data == "toggle_reg_1":
                     active_menu = "region"
-                    current_kind = 0
-                    if criteria.get("targets"):
-                        current_kind = criteria["targets"][0].get("kind", 0)
+                    current_kinds = criteria.get("kinds", [0])
+                    current_kind = current_kinds[0] if current_kinds else 0
                     targets = criteria.get("targets", [])
                     t_taipei = [t for t in targets if t.get("region") == 1]
                     if t_taipei:
@@ -565,9 +600,8 @@ def process_telegram_commands(token, chat_id, criteria, state):
                 elif data.startswith("toggle_sec_"):
                     active_menu = "region"
                     sec_id = data.split("_")[-1]
-                    current_kind = 0
-                    if criteria.get("targets"):
-                        current_kind = criteria["targets"][0].get("kind", 0)
+                    current_kinds = criteria.get("kinds", [0])
+                    current_kind = current_kinds[0] if current_kinds else 0
                     targets = criteria.get("targets", [])
                     t_npt = [t for t in targets if t.get("region") == 3]
                     district_names = {"26": "板橋區", "27": "汐止區", "37": "永和區", "43": "三重區"}
@@ -605,10 +639,29 @@ def process_telegram_commands(token, chat_id, criteria, state):
                 elif data.startswith("set_kind_"):
                     active_menu = "kind"
                     kind_val = int(data.split("_")[-1])
-                    for t in criteria.get("targets", []):
-                        t["kind"] = kind_val
+                    current_kinds = list(criteria.get("kinds", [0]))
                     kind_names = {0: "全部房源", 1: "整層住家", 2: "獨立套房", 3: "分租套房", 4: "雅房"}
-                    alert_text = f"搜尋類型已切換為：{kind_names.get(kind_val)}"
+                    k_name = kind_names.get(kind_val, str(kind_val))
+                    
+                    if kind_val == 0:
+                        criteria["kinds"] = [0]
+                        alert_text = "已設定為：全部房源"
+                    else:
+                        if 0 in current_kinds:
+                            current_kinds.remove(0)
+                        
+                        if kind_val in current_kinds:
+                            current_kinds.remove(kind_val)
+                            alert_text = f"已停用：{k_name}"
+                        else:
+                            current_kinds.append(kind_val)
+                            alert_text = f"已啟用：{k_name}"
+                            
+                        if not current_kinds:
+                            current_kinds = [0]
+                            alert_text = "無選取項目，預設為：全部房源"
+                            
+                        criteria["kinds"] = current_kinds
                     
                 # Answer callback immediately
                 ans_url = f"{base_url}/answerCallbackQuery"
@@ -713,19 +766,20 @@ def process_telegram_commands(token, chat_id, criteria, state):
                         "分租套房": 3, "分套": 3, 
                         "雅房": 4
                     }
-                    new_kind = None
+                    new_kinds = []
                     for k_name, k_val in kind_map.items():
                         if k_name in kind_str:
-                            new_kind = k_val
-                            break
+                            if k_val not in new_kinds:
+                                new_kinds.append(k_val)
                             
-                    if new_kind is not None:
-                        for target in criteria.get("targets", []):
-                            target["kind"] = new_kind
+                    if new_kinds:
+                        if 0 in new_kinds:
+                            new_kinds = [0]
+                        criteria["kinds"] = new_kinds
                         criteria_changed = True
                         
                         reverse_kind_map = {0: "全部", 1: "整層住家", 2: "獨立套房", 3: "分租套房", 4: "雅房"}
-                        reply_text = f"⚙️ <b>設定成功</b>\n租屋類型已更新為：{reverse_kind_map.get(new_kind)}"
+                        reply_text = f"⚙️ <b>設定成功</b>\n租屋類型已更新為：{', '.join(reverse_kind_map.get(k) for k in new_kinds)}"
                     else:
                         reply_text = "❌ <b>類型錯誤</b>\n支援的類型有：全部、整層、獨立套房、分租套房、雅房。"
                 except Exception as e:
@@ -754,6 +808,7 @@ def process_telegram_commands(token, chat_id, criteria, state):
                     "rentprice_min": criteria.get("rentprice_min", 0),
                     "rentprice_max": criteria.get("rentprice_max", 30000),
                     "targets": criteria.get("targets", []),
+                    "kinds": criteria.get("kinds", [0]),
                     "not_cover": criteria.get("not_cover", 0),
                     "lift": criteria.get("lift", 0),
                     "balcony_1": criteria.get("balcony_1", 0),
@@ -761,7 +816,7 @@ def process_telegram_commands(token, chat_id, criteria, state):
                 }
                 with open(CRITERIA_PATH, 'w', encoding='utf-8') as f:
                     json.dump(filtered_criteria, f, indent=4, ensure_ascii=False)
-                print("[✓] Search criteria updated and saved.")
+                print("[OK] Search criteria updated and saved.")
             except Exception as e:
                 print(f"[ERROR] Failed to save updated criteria: {e}")
                 
@@ -804,13 +859,17 @@ def main():
     last_scrape_time = 0
     
     targets_desc = []
+    current_kinds = config.get("kinds", [0])
+    kind_names_desc = {0: "全部", 1: "整層", 2: "獨套", 3: "分套", 4: "雅房"}
+    kind_desc = ", ".join(kind_names_desc.get(k, "未知") for k in current_kinds)
+    
     for t in config.get("targets", []):
         if t["region"] == 1:
-            targets_desc.append("台北市(全部)")
+            targets_desc.append(f"台北市(全部)[{kind_desc}]")
         elif t["region"] == 3:
             district_map = {"26": "板橋", "27": "汐止", "37": "永和", "43": "三重"}
-            sec_names = [district_map.get(sid, sid) for sid in t.get("section", "").split(",")]
-            targets_desc.append(f"新北市({', '.join(sec_names)})")
+            sec_names = [district_map.get(sid, sid) for sid in t.get("section", "").split(",") if sid]
+            targets_desc.append(f"新北市({', '.join(sec_names)})[{kind_desc}]")
             
     print(f"[*] Search Targets: {', '.join(targets_desc)} | Max Price: {config.get('rentprice_max')} TWD")
     if run_once:
@@ -844,16 +903,24 @@ def main():
             
             all_listings = []
             seen_post_ids = set()
+            active_kinds = config.get("kinds", [0])
             
             for target in config.get("targets", []):
-                print(f"[{current_time}] Fetching target: Region {target.get('region')} Section {target.get('section', 'All')}...")
-                target_listings = get_591_listings(session, config, target)
-                for item in target_listings:
-                    post_id = item.get('post_id') or item.get('id')
-                    if post_id and post_id not in seen_post_ids:
-                        seen_post_ids.add(post_id)
-                        all_listings.append(item)
-                time.sleep(2)
+                for k in active_kinds:
+                    k_name = {0: "全部", 1: "整層住家", 2: "獨立套房", 3: "分租套房", 4: "雅房"}.get(k, str(k))
+                    print(f"[{current_time}] Fetching target: Region {target.get('region')} Section {target.get('section', 'All')} Kind {k_name}...")
+                    
+                    target_copy = target.copy()
+                    target_copy["kind"] = k
+                    
+                    target_listings = get_591_listings(session, config, target_copy)
+                    for item in target_listings:
+                        post_id = item.get('post_id') or item.get('id')
+                        if post_id and post_id not in seen_post_ids:
+                            seen_post_ids.add(post_id)
+                            all_listings.append(item)
+                    time.sleep(2)
+
                 
             if all_listings:
                 print(f"[{current_time}] Successfully fetched {len(all_listings)} combined listings.")
