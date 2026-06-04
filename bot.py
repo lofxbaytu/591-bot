@@ -76,6 +76,7 @@ def load_criteria():
         "exclude_keywords": ["林森北路"],
         "min_area": 15,
         "floor_ratio_filter": 1,
+        "mrt_within_500": 1,
         "other_params": {}
     }
     
@@ -95,6 +96,8 @@ def load_criteria():
                     criteria["min_area"] = 15
                 if "floor_ratio_filter" not in criteria:
                     criteria["floor_ratio_filter"] = 1
+                if "mrt_within_500" not in criteria:
+                    criteria["mrt_within_500"] = 1
                 return criteria
         except Exception as e:
             print(f"[!] Warning: Failed to parse search criteria, using default: {e}")
@@ -244,6 +247,32 @@ def parse_floor(floor_str):
     except Exception:
         pass
     return None, None
+
+def check_mrt_constraint(surrounding, max_dist=500):
+    """
+    Checks if the listing has a surrounding subway station within max_dist meters.
+    Returns True if:
+      - surrounding is a dict
+      - surrounding['type'] == 'subway_station'
+      - distance parsed as int is <= max_dist
+    Otherwise returns False.
+    """
+    if not surrounding or not isinstance(surrounding, dict):
+        return False
+    
+    if surrounding.get("type") != "subway_station":
+        return False
+        
+    dist_str = surrounding.get("distance", "")
+    match = re.search(r'(\d+)', dist_str)
+    if not match:
+        return False
+        
+    try:
+        dist_val = int(match.group(1))
+        return dist_val <= max_dist
+    except ValueError:
+        return False
 
 def send_telegram_notification(token, chat_id, house_info):
     """Sends notification to Telegram via Bot API, preferring photo format if available."""
@@ -561,11 +590,13 @@ def render_menu(criteria, menu_name):
         lift_status = "🟢 開" if criteria.get("lift", 0) == 1 else "🔴 關"
         balcony_status = "🟢 開" if criteria.get("balcony_1", 0) == 1 else "🔴 關"
         floor_ratio_status = "🟢 開" if criteria.get("floor_ratio_filter", 1) == 1 else "🔴 關"
+        mrt_within_500_status = "🟢 開" if criteria.get("mrt_within_500", 1) == 1 else "🔴 關"
         
         not_cover_desc = "✅ 已排除頂樓加蓋" if criteria.get("not_cover", 0) == 1 else "❌ 未排除頂樓加蓋"
         lift_desc = "✅ 限制必須有電梯" if criteria.get("lift", 0) == 1 else "❌ 不限制電梯"
         balcony_desc = "✅ 限制必須有陽台" if criteria.get("balcony_1", 0) == 1 else "❌ 不限制陽台"
         floor_ratio_desc = "✅ 限制大於總樓層一半" if criteria.get("floor_ratio_filter", 1) == 1 else "❌ 不限制高樓層"
+        mrt_within_500_desc = "✅ 限制捷運 500m 內" if criteria.get("mrt_within_500", 1) == 1 else "❌ 不限制捷運距離"
         
         min_area = criteria.get("min_area", 0)
         area_limit_desc = f"{min_area} 坪以上" if min_area > 0 else "不限制"
@@ -581,6 +612,7 @@ def render_menu(criteria, menu_name):
             f"• {lift_desc}\n"
             f"• {balcony_desc}\n"
             f"• {floor_ratio_desc}\n"
+            f"• {mrt_within_500_desc}\n"
             f"• 📏 <b>最小坪數：</b> {area_limit_desc}\n"
             f"• 🚫 <b>排除字詞：</b> {exclude_desc}\n\n"
             f"💡 點選下方按鈕即可即時切換或進入子選單設定。"
@@ -595,6 +627,9 @@ def render_menu(criteria, menu_name):
                 [
                     {"text": f"🛗 有電梯: {lift_status}", "callback_data": "toggle_lift"},
                     {"text": f"☀️ 有陽台: {balcony_status}", "callback_data": "toggle_balcony"}
+                ],
+                [
+                    {"text": f"🚇 捷運 500m: {mrt_within_500_status}", "callback_data": "toggle_mrt_500"}
                 ],
                 [
                     {"text": "📍 地區設定", "callback_data": "menu_region"},
@@ -699,6 +734,11 @@ def process_telegram_commands(token, chat_id, criteria, state):
                     current = criteria.get("floor_ratio_filter", 1)
                     criteria["floor_ratio_filter"] = 1 if current == 0 else 0
                     alert_text = "已開啟樓層限制(>一半)" if criteria["floor_ratio_filter"] == 1 else "已關閉樓層限制"
+                    active_menu = "main"
+                elif data == "toggle_mrt_500":
+                    current = criteria.get("mrt_within_500", 1)
+                    criteria["mrt_within_500"] = 1 if current == 0 else 0
+                    alert_text = "限制捷運 500m 內" if criteria["mrt_within_500"] == 1 else "取消捷運距離限制"
                     active_menu = "main"
                 elif data == "toggle_reg_1":
                     active_menu = "region"
@@ -964,6 +1004,29 @@ def process_telegram_commands(token, chat_id, criteria, state):
                     else:
                         reply_text = "❌ <b>格式錯誤</b>\n請輸入 `/樓層` (切換開關) 或 `/樓層 <開/關>`"
                         
+            # 6.5 /mrt or /捷運
+            elif text.startswith("/mrt") or text.startswith("/捷運"):
+                parts = text.split(maxsplit=1)
+                current = criteria.get("mrt_within_500", 1)
+                if len(parts) < 2:
+                    # Toggle
+                    new_val = 1 if current == 0 else 0
+                    criteria["mrt_within_500"] = new_val
+                    criteria_changed = True
+                    reply_text = "⚙️ <b>設定成功</b>\n已開啟捷運距離限制 (離捷運站500公尺內)" if new_val == 1 else "⚙️ <b>設定成功</b>\n已關閉捷運距離限制"
+                else:
+                    arg = parts[1].strip()
+                    if arg in ("1", "on", "開", "啟用", "true"):
+                        criteria["mrt_within_500"] = 1
+                        criteria_changed = True
+                        reply_text = "⚙️ <b>設定成功</b>\n已開啟捷運距離限制 (離捷運站500公尺內)"
+                    elif arg in ("0", "off", "關", "停用", "false"):
+                        criteria["mrt_within_500"] = 0
+                        criteria_changed = True
+                        reply_text = "⚙️ <b>設定成功</b>\n已關閉捷運距離限制"
+                    else:
+                        reply_text = "❌ <b>格式錯誤</b>\n請輸入 `/捷運` (切換開關) 或 `/捷運 <開/關>`"
+                        
             # 7. /status or /狀態
             elif text == "/status" or text == "/狀態":
                 reply_text, keyboard = render_menu(criteria, "main")
@@ -994,6 +1057,7 @@ def process_telegram_commands(token, chat_id, criteria, state):
                     "exclude_keywords": criteria.get("exclude_keywords", ["林森北路"]),
                     "min_area": criteria.get("min_area", 15),
                     "floor_ratio_filter": criteria.get("floor_ratio_filter", 1),
+                    "mrt_within_500": criteria.get("mrt_within_500", 1),
                     "other_params": criteria.get("other_params", {})
                 }
                 with open(CRITERIA_PATH, 'w', encoding='utf-8') as f:
@@ -1128,6 +1192,13 @@ def main():
                                 if not (cur_fl > (tot_fl / 2.0)):
                                     print(f"[!] Excluded listing {post_id} due to floor {floor_str} (Cur: {cur_fl} <= Half Tot: {tot_fl/2.0})")
                                     continue
+                                    
+                        # 1.5 MRT distance filter
+                        if config.get("mrt_within_500", 1) == 1:
+                            surrounding = listing.get("surrounding")
+                            if not check_mrt_constraint(surrounding, max_dist=500):
+                                print(f"[!] Excluded listing {post_id} due to MRT distance/absence: {surrounding}")
+                                continue
                                     
                         # 2. Fetch correct area and real address once
                         raw_area = listing.get('area', '0')

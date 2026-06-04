@@ -8,12 +8,20 @@
         },
         {
             "region": 3,
-            "section": "26,27,37,43",
+            "section": "26,37,43",
             "kind": 2
         }
     ],
-    "not_cover": 0,
+    "kinds": [
+        2
+    ],
+    "not_cover": 1,
     "lift": 1,
     "balcony_1": 1,
+    "exclude_keywords": [
+        "林森北路"
+    ],
+    "min_area": 15,
+    "floor_ratio_filter": 1,
     "other_params": {}
 }
