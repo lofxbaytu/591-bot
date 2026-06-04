@@ -75,6 +75,7 @@ def load_criteria():
         "balcony_1": 0,
         "exclude_keywords": ["林森北路"],
         "min_area": 15,
+        "floor_ratio_filter": 1,
         "other_params": {}
     }
     
@@ -92,6 +93,8 @@ def load_criteria():
                     criteria["exclude_keywords"] = ["林森北路"]
                 if "min_area" not in criteria:
                     criteria["min_area"] = 15
+                if "floor_ratio_filter" not in criteria:
+                    criteria["floor_ratio_filter"] = 1
                 return criteria
         except Exception as e:
             print(f"[!] Warning: Failed to parse search criteria, using default: {e}")
@@ -132,33 +135,115 @@ def save_seen_listings(state):
     except Exception as e:
         print(f"[ERROR] Failed to save seen listings: {e}")
 
-def get_correct_area(post_id, default_area):
-    """Fetches the detail page for a post and extracts the correct area in 坪."""
+def get_detail_info(post_id, default_area, default_address, region_id, section_name):
+    """
+    Fetches the detail page for a post and extracts BOTH:
+    1. The correct area in 坪.
+    2. The correct real address (bypassing 591 obfuscation).
+    """
     url = f"https://rent.591.com.tw/rent-detail-{post_id}.html"
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
     }
+    
+    area_val = default_area
+    address_val = default_address
+    
     try:
         res = requests.get(url, headers=headers, timeout=10)
         if res.status_code == 200:
-            match = re.search(r'"使用坪數"\s*,\s*"([\d\.]+)\s*坪"', res.text)
-            if not match:
-                match = re.search(r'"坪數"\s*,\s*"([\d\.]+)\s*坪"', res.text)
-            if not match:
-                match = re.search(r'([\d\.]+)\s*坪', res.text)
-            if match:
-                return match.group(1)
+            html = res.text
+            
+            # 1. Extract Area
+            area_match = re.search(r'"使用坪數"\s*,\s*"([\d\.]+)\s*坪"', html)
+            if not area_match:
+                area_match = re.search(r'"坪數"\s*,\s*"([\d\.]+)\s*坪"', html)
+            if not area_match:
+                area_match = re.search(r'([\d\.]+)\s*坪', html)
+            if area_match:
+                area_val = area_match.group(1)
+                
+            # 2. Extract Address
+            meta_desc = ""
+            desc_match = re.search(r'<meta[^>]+name="description"[^>]+content="([^"]+)"', html)
+            if desc_match:
+                meta_desc = desc_match.group(1)
+            else:
+                desc_match = re.search(r'<meta[^>]+property="og:description"[^>]+content="([^"]+)"', html)
+                if desc_match:
+                    meta_desc = desc_match.group(1)
+                    
+            street_address = ""
+            if meta_desc:
+                located_match = re.search(r'位於([^，。！\?]+)', meta_desc)
+                if located_match:
+                    street_address = located_match.group(1).strip()
+            
+            if not street_address:
+                located_match = re.search(r'位於([^，。！\?]+)', html)
+                if located_match:
+                    street_address = located_match.group(1).strip()
+                    
+            if street_address:
+                region_name = "台北市" if str(region_id) == "1" else "新北市"
+                address_val = f"{region_name}{section_name}{street_address}"
+            else:
+                addr_match = re.search(r'((?:台北市|新北市)[^"<>\s]+(?:路|街|巷|弄|號))', html)
+                if addr_match:
+                    address_val = addr_match.group(1)
     except Exception as e:
-        print(f"[!] Error fetching correct area for {post_id}: {e}")
-    
+        print(f"[!] Error fetching detail info for {post_id}: {e}")
+        
+    # Format area fallback estimation if needed
     try:
-        val = float(default_area)
+        val = float(area_val)
         if val > 100:
-            return f"{round(val / 10 * 0.3025, 2)} (估)"
+            area_val = f"{round(val / 10 * 0.3025, 2)} (估)"
         else:
-            return str(default_area)
+            area_val = str(area_val)
     except Exception:
-        return str(default_area)
+        area_val = str(area_val)
+        
+    return area_val, address_val
+
+def parse_floor(floor_str):
+    """
+    Parses floor_str (e.g. '6F/7F', '1~2F/5F', '頂樓加蓋/5F')
+    returns (current_floor, total_floors) as (int, int)
+    If parsing fails, returns (None, None).
+    """
+    if not floor_str:
+        return None, None
+    try:
+        parts = floor_str.split('/')
+        if len(parts) != 2:
+            return None, None
+            
+        cur_part = parts[0].strip()
+        tot_part = parts[1].strip()
+        
+        tot_match = re.search(r'(\d+)', tot_part)
+        if not tot_match:
+            return None, None
+        total_floors = int(tot_match.group(1))
+        
+        current_floor = None
+        if "整棟" in cur_part:
+            current_floor = total_floors
+        elif "頂樓加蓋" in cur_part or "頂加" in cur_part:
+            current_floor = total_floors
+        else:
+            is_basement = "B" in cur_part or "地下" in cur_part
+            cur_match = re.search(r'(\d+)', cur_part)
+            if cur_match:
+                val = int(cur_match.group(1))
+                current_floor = -val if is_basement else val
+                
+        if current_floor is not None:
+            return current_floor, total_floors
+    except Exception:
+        pass
+    return None, None
 
 def send_telegram_notification(token, chat_id, house_info):
     """Sends notification to Telegram via Bot API, preferring photo format if available."""
@@ -166,22 +251,28 @@ def send_telegram_notification(token, chat_id, house_info):
     title = escape_html(house_info.get('title') or house_info.get('name') or "無標題")
     price = house_info.get('price', '未提供')
     price_unit = house_info.get('price_unit', '元/月')
-    raw_area = house_info.get('area', '未提供')
+    
     correct_area = house_info.get('correct_area')
-    if not correct_area:
-        correct_area = get_correct_area(post_id, raw_area)
+    correct_address = house_info.get('correct_address')
+    
+    if not correct_area or not correct_address:
+        raw_area = house_info.get('area', '未提供')
+        raw_address = house_info.get('address') or house_info.get('location') or ""
+        region_id = house_info.get('region', 1)
+        section_name = house_info.get('section_name', '')
+        
+        detail_area, detail_address = get_detail_info(post_id, raw_area, raw_address, region_id, section_name)
+        if not correct_area:
+            correct_area = detail_area
+        if not correct_address:
+            correct_address = detail_address
+            
     area = correct_area
+    location = escape_html(correct_address or "無地址資訊")
     room_str = escape_html(house_info.get('room_str') or house_info.get('layout') or house_info.get('kind_name', '未提供格局'))
     floor_str = escape_html(house_info.get('floor_str') or house_info.get('floor') or '未提供樓層')
     
-    location = escape_html(
-        house_info.get('address') or 
-        house_info.get('location') or 
-        f"{house_info.get('section_name', '')}{house_info.get('street_name', '')}" or 
-        "無地址資訊"
-    )
-    
-    url = f"https://rent.591.com.tw/rent-detail-{post_id}.html"
+    url = f"https://rent.591.com.tw/{post_id}"
     
     caption = (
         f"🏠 <b>發現新房源！</b>\n\n"
@@ -469,10 +560,12 @@ def render_menu(criteria, menu_name):
         not_cover_status = "🟢 開" if criteria.get("not_cover", 0) == 1 else "🔴 關"
         lift_status = "🟢 開" if criteria.get("lift", 0) == 1 else "🔴 關"
         balcony_status = "🟢 開" if criteria.get("balcony_1", 0) == 1 else "🔴 關"
+        floor_ratio_status = "🟢 開" if criteria.get("floor_ratio_filter", 1) == 1 else "🔴 關"
         
         not_cover_desc = "✅ 已排除頂樓加蓋" if criteria.get("not_cover", 0) == 1 else "❌ 未排除頂樓加蓋"
         lift_desc = "✅ 限制必須有電梯" if criteria.get("lift", 0) == 1 else "❌ 不限制電梯"
         balcony_desc = "✅ 限制必須有陽台" if criteria.get("balcony_1", 0) == 1 else "❌ 不限制陽台"
+        floor_ratio_desc = "✅ 限制大於總樓層一半" if criteria.get("floor_ratio_filter", 1) == 1 else "❌ 不限制高樓層"
         
         min_area = criteria.get("min_area", 0)
         area_limit_desc = f"{min_area} 坪以上" if min_area > 0 else "不限制"
@@ -487,6 +580,7 @@ def render_menu(criteria, menu_name):
             f"• {not_cover_desc}\n"
             f"• {lift_desc}\n"
             f"• {balcony_desc}\n"
+            f"• {floor_ratio_desc}\n"
             f"• 📏 <b>最小坪數：</b> {area_limit_desc}\n"
             f"• 🚫 <b>排除字詞：</b> {exclude_desc}\n\n"
             f"💡 點選下方按鈕即可即時切換或進入子選單設定。"
@@ -495,7 +589,8 @@ def render_menu(criteria, menu_name):
         keyboard = {
             "inline_keyboard": [
                 [
-                    {"text": f"📶 排除頂加: {not_cover_status}", "callback_data": "toggle_not_cover"}
+                    {"text": f"📶 排除頂加: {not_cover_status}", "callback_data": "toggle_not_cover"},
+                    {"text": f"🏢 樓層限制(>一半): {floor_ratio_status}", "callback_data": "toggle_floor_ratio"}
                 ],
                 [
                     {"text": f"🛗 有電梯: {lift_status}", "callback_data": "toggle_lift"},
@@ -599,6 +694,11 @@ def process_telegram_commands(token, chat_id, criteria, state):
                     current = criteria.get("balcony_1", 0)
                     criteria["balcony_1"] = 1 if current == 0 else 0
                     alert_text = "限制必須有陽台" if criteria["balcony_1"] == 1 else "取消陽台限制"
+                    active_menu = "main"
+                elif data == "toggle_floor_ratio":
+                    current = criteria.get("floor_ratio_filter", 1)
+                    criteria["floor_ratio_filter"] = 1 if current == 0 else 0
+                    alert_text = "已開啟樓層限制(>一半)" if criteria["floor_ratio_filter"] == 1 else "已關閉樓層限制"
                     active_menu = "main"
                 elif data == "toggle_reg_1":
                     active_menu = "region"
@@ -841,7 +941,30 @@ def process_telegram_commands(token, chat_id, criteria, state):
                 except Exception:
                     reply_text = "❌ <b>格式錯誤</b>\n請輸入 `/坪數 <數字>` (例如：`/坪數 15`，輸入 0 代表不限制)"
                     
-            # 6. /status or /狀態
+            # 6. /floor or /樓層
+            elif text.startswith("/floor") or text.startswith("/樓層"):
+                parts = text.split(maxsplit=1)
+                current = criteria.get("floor_ratio_filter", 1)
+                if len(parts) < 2:
+                    # Toggle
+                    new_val = 1 if current == 0 else 0
+                    criteria["floor_ratio_filter"] = new_val
+                    criteria_changed = True
+                    reply_text = "⚙️ <b>設定成功</b>\n已開啟樓層限制 (房源樓層必須大於總樓層一半)" if new_val == 1 else "⚙️ <b>設定成功</b>\n已關閉樓層限制"
+                else:
+                    arg = parts[1].strip()
+                    if arg in ("1", "on", "開", "啟用", "true"):
+                        criteria["floor_ratio_filter"] = 1
+                        criteria_changed = True
+                        reply_text = "⚙️ <b>設定成功</b>\n已開啟樓層限制 (房源樓層必須大於總樓層一半)"
+                    elif arg in ("0", "off", "關", "停用", "false"):
+                        criteria["floor_ratio_filter"] = 0
+                        criteria_changed = True
+                        reply_text = "⚙️ <b>設定成功</b>\n已關閉樓層限制"
+                    else:
+                        reply_text = "❌ <b>格式錯誤</b>\n請輸入 `/樓層` (切換開關) 或 `/樓層 <開/關>`"
+                        
+            # 7. /status or /狀態
             elif text == "/status" or text == "/狀態":
                 reply_text, keyboard = render_menu(criteria, "main")
                 
@@ -870,6 +993,7 @@ def process_telegram_commands(token, chat_id, criteria, state):
                     "balcony_1": criteria.get("balcony_1", 0),
                     "exclude_keywords": criteria.get("exclude_keywords", ["林森北路"]),
                     "min_area": criteria.get("min_area", 15),
+                    "floor_ratio_filter": criteria.get("floor_ratio_filter", 1),
                     "other_params": criteria.get("other_params", {})
                 }
                 with open(CRITERIA_PATH, 'w', encoding='utf-8') as f:
@@ -996,17 +1120,31 @@ def main():
                     if post_id not in seen_listings:
                         seen_listings.add(post_id)
                         
-                        # Fetch correct area once and cache it in the listing dict
+                        # 1. Floor ratio filter
+                        if config.get("floor_ratio_filter", 1) == 1:
+                            floor_str = listing.get('floor_str') or listing.get('floor')
+                            cur_fl, tot_fl = parse_floor(floor_str)
+                            if cur_fl is not None and tot_fl is not None:
+                                if not (cur_fl > (tot_fl / 2.0)):
+                                    print(f"[!] Excluded listing {post_id} due to floor {floor_str} (Cur: {cur_fl} <= Half Tot: {tot_fl/2.0})")
+                                    continue
+                                    
+                        # 2. Fetch correct area and real address once
                         raw_area = listing.get('area', '0')
-                        correct_area = get_correct_area(post_id, raw_area)
-                        listing['correct_area'] = correct_area
+                        raw_address = listing.get('address') or listing.get('location') or ""
+                        region_id = listing.get('region', 1)
+                        section_name = listing.get('section_name', '')
                         
-                        # Check area size filter
+                        detail_area, detail_address = get_detail_info(post_id, raw_area, raw_address, region_id, section_name)
+                        listing['correct_area'] = detail_area
+                        listing['correct_address'] = detail_address
+                        
+                        # 3. Check area size filter
                         min_area = config.get("min_area", 0)
                         if min_area > 0:
                             area_val = 0.0
                             try:
-                                area_match = re.search(r'([\d\.]+)', correct_area)
+                                area_match = re.search(r'([\d\.]+)', detail_area)
                                 if area_match:
                                     area_val = float(area_match.group(1))
                             except Exception:
@@ -1016,14 +1154,14 @@ def main():
                                 print(f"[!] Excluded listing {post_id} due to area {area_val} < min_area {min_area}")
                                 continue
                         
-                        # Check exclude keywords
+                        # 4. Check exclude keywords (using real detail_address)
                         exclude_list = config.get("exclude_keywords", [])
                         should_exclude = False
                         matched_kw = ""
                         check_text = (
                             f"{listing.get('title') or ''} "
                             f"{listing.get('name') or ''} "
-                            f"{listing.get('address') or ''} "
+                            f"{detail_address} "
                             f"{listing.get('location') or ''} "
                             f"{listing.get('section_name') or ''} "
                             f"{listing.get('street_name') or ''}"
