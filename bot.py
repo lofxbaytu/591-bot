@@ -74,6 +74,7 @@ def load_criteria():
         "lift": 0,
         "balcony_1": 0,
         "exclude_keywords": ["林森北路"],
+        "min_area": 15,
         "other_params": {}
     }
     
@@ -89,6 +90,8 @@ def load_criteria():
                     criteria["kinds"] = list(kinds) if kinds else [0]
                 if "exclude_keywords" not in criteria:
                     criteria["exclude_keywords"] = ["林森北路"]
+                if "min_area" not in criteria:
+                    criteria["min_area"] = 15
                 return criteria
         except Exception as e:
             print(f"[!] Warning: Failed to parse search criteria, using default: {e}")
@@ -164,7 +167,10 @@ def send_telegram_notification(token, chat_id, house_info):
     price = house_info.get('price', '未提供')
     price_unit = house_info.get('price_unit', '元/月')
     raw_area = house_info.get('area', '未提供')
-    area = get_correct_area(post_id, raw_area)
+    correct_area = house_info.get('correct_area')
+    if not correct_area:
+        correct_area = get_correct_area(post_id, raw_area)
+    area = correct_area
     room_str = escape_html(house_info.get('room_str') or house_info.get('layout') or house_info.get('kind_name', '未提供格局'))
     floor_str = escape_html(house_info.get('floor_str') or house_info.get('floor') or '未提供樓層')
     
@@ -468,6 +474,8 @@ def render_menu(criteria, menu_name):
         lift_desc = "✅ 限制必須有電梯" if criteria.get("lift", 0) == 1 else "❌ 不限制電梯"
         balcony_desc = "✅ 限制必須有陽台" if criteria.get("balcony_1", 0) == 1 else "❌ 不限制陽台"
         
+        min_area = criteria.get("min_area", 0)
+        area_limit_desc = f"{min_area} 坪以上" if min_area > 0 else "不限制"
         exclude_list = criteria.get("exclude_keywords", [])
         exclude_desc = ", ".join(exclude_list) if exclude_list else "無"
         
@@ -479,6 +487,7 @@ def render_menu(criteria, menu_name):
             f"• {not_cover_desc}\n"
             f"• {lift_desc}\n"
             f"• {balcony_desc}\n"
+            f"• 📏 <b>最小坪數：</b> {area_limit_desc}\n"
             f"• 🚫 <b>排除字詞：</b> {exclude_desc}\n\n"
             f"💡 點選下方按鈕即可即時切換或進入子選單設定。"
         )
@@ -821,7 +830,18 @@ def process_telegram_commands(token, chat_id, criteria, state):
                         criteria["exclude_keywords"] = exclude_list
                         criteria_changed = True
                         
-            # 5. /status or /狀態
+            # 5. /area or /坪數
+            elif text.startswith("/area ") or text.startswith("/坪數 "):
+                try:
+                    area_str = text.split(maxsplit=1)[1]
+                    val = float(area_str)
+                    criteria["min_area"] = val
+                    criteria_changed = True
+                    reply_text = f"⚙️ <b>設定成功</b>\n最小坪數限制已更新為：{val} 坪以上" if val > 0 else "⚙️ <b>設定成功</b>\n已取消最小坪數限制"
+                except Exception:
+                    reply_text = "❌ <b>格式錯誤</b>\n請輸入 `/坪數 <數字>` (例如：`/坪數 15`，輸入 0 代表不限制)"
+                    
+            # 6. /status or /狀態
             elif text == "/status" or text == "/狀態":
                 reply_text, keyboard = render_menu(criteria, "main")
                 
@@ -849,6 +869,7 @@ def process_telegram_commands(token, chat_id, criteria, state):
                     "lift": criteria.get("lift", 0),
                     "balcony_1": criteria.get("balcony_1", 0),
                     "exclude_keywords": criteria.get("exclude_keywords", ["林森北路"]),
+                    "min_area": criteria.get("min_area", 15),
                     "other_params": criteria.get("other_params", {})
                 }
                 with open(CRITERIA_PATH, 'w', encoding='utf-8') as f:
@@ -974,6 +995,26 @@ def main():
                     
                     if post_id not in seen_listings:
                         seen_listings.add(post_id)
+                        
+                        # Fetch correct area once and cache it in the listing dict
+                        raw_area = listing.get('area', '0')
+                        correct_area = get_correct_area(post_id, raw_area)
+                        listing['correct_area'] = correct_area
+                        
+                        # Check area size filter
+                        min_area = config.get("min_area", 0)
+                        if min_area > 0:
+                            area_val = 0.0
+                            try:
+                                area_match = re.search(r'([\d\.]+)', correct_area)
+                                if area_match:
+                                    area_val = float(area_match.group(1))
+                            except Exception:
+                                pass
+                            
+                            if area_val < min_area:
+                                print(f"[!] Excluded listing {post_id} due to area {area_val} < min_area {min_area}")
+                                continue
                         
                         # Check exclude keywords
                         exclude_list = config.get("exclude_keywords", [])
