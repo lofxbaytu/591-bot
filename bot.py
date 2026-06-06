@@ -302,8 +302,10 @@ def send_telegram_notification(token, chat_id, house_info):
     floor_str = escape_html(house_info.get('floor_str') or house_info.get('floor') or '未提供樓層')
     
     url = f"https://rent.591.com.tw/rent-detail-{post_id}.html"
-    app_url_1 = f"house591://detail?id={post_id}"
-    app_url_2 = f"house591://rentDetail?id={post_id}"
+    ios_app_1 = f"tw591://rentDetail?id={post_id}"
+    ios_app_2 = f"tw591://detail?id={post_id}"
+    android_app_1 = f"tj591://rentDetail?id={post_id}"
+    android_app_2 = f"tj591://detail?id={post_id}"
     
     caption = (
         f"🏠 <b>發現新房源！</b>\n\n"
@@ -314,8 +316,8 @@ def send_telegram_notification(token, chat_id, house_info):
         f"🏢 <b>樓層：</b> {floor_str}\n"
         f"📍 <b>地點：</b> {location}\n\n"
         f"🔗 <a href='{url}'>點此開啟網頁版</a>\n"
-        f"📱 <a href='{app_url_1}'>點此以 591 App 開啟 (推薦)</a>\n"
-        f"📱 <a href='{app_url_2}'>備用 App 開啟連結</a>"
+        f"🍎 <b>iOS App:</b> <a href='{ios_app_1}'>連結一</a> | <a href='{ios_app_2}'>連結二</a>\n"
+        f"🤖 <b>Android App:</b> <a href='{android_app_1}'>連結一</a> | <a href='{android_app_2}'>連結二</a>"
     )
     
     photo_url = house_info.get('cover')
