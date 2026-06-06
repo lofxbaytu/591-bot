@@ -302,10 +302,11 @@ def send_telegram_notification(token, chat_id, house_info):
     floor_str = escape_html(house_info.get('floor_str') or house_info.get('floor') or '未提供樓層')
     
     url = f"https://rent.591.com.tw/rent-detail-{post_id}.html"
-    ios_app_1 = f"tw591://rentDetail?id={post_id}"
-    ios_app_2 = f"tw591://detail?id={post_id}"
-    android_app_1 = f"tj591://rentDetail?id={post_id}"
-    android_app_2 = f"tj591://detail?id={post_id}"
+    redirect_base = "https://lofxbaytu.github.io/591-bot/redirect.html"
+    ios_app_1 = f"{redirect_base}?scheme=tw591&action=rentDetail&id={post_id}"
+    ios_app_2 = f"{redirect_base}?scheme=tw591&action=detail&id={post_id}"
+    android_app_1 = f"{redirect_base}?scheme=tj591&action=rentDetail&id={post_id}"
+    android_app_2 = f"{redirect_base}?scheme=tj591&action=detail&id={post_id}"
     
     caption = (
         f"🏠 <b>發現新房源！</b>\n\n"
