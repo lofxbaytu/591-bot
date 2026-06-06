@@ -2,7 +2,7 @@
 <html>
 <head>
     <meta charset="utf-8">
-    <title>正在開啟 591 App...</title>
+    <title>開啟 591 App</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <style>
         body {
@@ -13,68 +13,126 @@
             justify-content: center;
             height: 100vh;
             margin: 0;
-            background-color: #f5f5f5;
+            background-color: #f8f9fa;
             color: #333;
         }
         .container {
             text-align: center;
-            padding: 20px;
+            padding: 30px;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+            max-width: 90%;
+            width: 350px;
         }
-        .spinner {
-            border: 4px solid rgba(0, 0, 0, 0.1);
-            width: 36px;
-            height: 36px;
-            border-radius: 50%;
-            border-left-color: #ff6600;
-            animation: spin 1s linear infinite;
-            margin: 0 auto 20px;
+        .logo {
+            font-size: 48px;
+            margin-bottom: 15px;
         }
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
+        h2 {
+            margin-top: 0;
+            color: #222;
+            font-size: 20px;
+        }
+        p {
+            font-size: 14px;
+            color: #666;
+            line-height: 1.5;
+            margin-bottom: 25px;
         }
         .btn {
-            display: inline-block;
-            margin-top: 20px;
-            padding: 10px 20px;
+            display: block;
+            margin: 10px 0;
+            padding: 12px;
+            border-radius: 8px;
+            text-decoration: none;
+            font-weight: bold;
+            font-size: 16px;
+            transition: background 0.2s;
+            text-align: center;
+        }
+        .btn-primary {
             background-color: #ff6600;
             color: white;
-            text-decoration: none;
-            border-radius: 5px;
-            font-weight: bold;
+        }
+        .btn-primary:hover {
+            background-color: #e65c00;
+        }
+        .btn-secondary {
+            background-color: #e9ecef;
+            color: #495057;
+        }
+        .btn-secondary:hover {
+            background-color: #dee2e6;
+        }
+        .btn-outline {
+            border: 1px solid #ced4da;
+            color: #6c757d;
+        }
+        .btn-outline:hover {
+            background-color: #f8f9fa;
+        }
+        .os-section {
+            display: none;
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <div class="spinner"></div>
-        <h2>正在為您打開 591 App...</h2>
-        <p>若系統沒有自動跳轉，請點選下方按鈕直接前往網頁版：</p>
-        <a id="fallback-btn" class="btn" href="#">前往網頁版</a>
+        <div class="logo">🏠</div>
+        <h2>正在為您開啟 591 房源</h2>
+        <p>因手機瀏覽器限制，請點選下方按鈕直接喚起 591 App：</p>
+        
+        <!-- iOS Section -->
+        <div id="ios-section" class="os-section">
+            <a id="ios-btn-1" class="btn btn-primary" href="#">🍎 點此以 591 App 開啟 (推薦)</a>
+            <a id="ios-btn-2" class="btn btn-secondary" href="#">🍎 備用 App 開啟連結</a>
+        </div>
+
+        <!-- Android Section -->
+        <div id="android-section" class="os-section">
+            <a id="android-btn-1" class="btn btn-primary" href="#">🤖 點此以 591 App 開啟 (推薦)</a>
+            <a id="android-btn-2" class="btn btn-secondary" href="#">🤖 備用 App 開啟連結</a>
+        </div>
+
+        <!-- Common Fallback -->
+        <a id="web-btn" class="btn btn-outline" href="#">🌐 前往 591 網頁版</a>
     </div>
 
     <script>
-        // Parse query parameters
+        // Parse parameters
         const urlParams = new URLSearchParams(window.location.search);
-        const scheme = urlParams.get('scheme') || 'tw591'; // tw591, tj591, house591
-        const action = urlParams.get('action') || 'rentDetail'; // rentDetail, detail
         const id = urlParams.get('id');
         
         const fallbackUrl = id ? `https://rent.591.com.tw/rent-detail-${id}.html` : 'https://rent.591.com.tw';
-        document.getElementById('fallback-btn').href = fallbackUrl;
+        document.getElementById('web-btn').href = fallbackUrl;
 
         if (id) {
-            // Attempt to trigger the App custom scheme link
-            const appUrl = `${scheme}://${action}?id=${id}`;
-            
-            // Try opening in App
-            window.location.href = appUrl;
-            
-            // Fallback redirect after a short timeout if App is not installed
-            setTimeout(() => {
-                window.location.href = fallbackUrl;
-            }, 2000);
+            // Set href attributes for buttons
+            document.getElementById('ios-btn-1').href = `tw591://rentDetail?id=${id}`;
+            document.getElementById('ios-btn-2').href = `tw591://detail?id=${id}`;
+            document.getElementById('android-btn-1').href = `tj591://rentDetail?id=${id}`;
+            document.getElementById('android-btn-2').href = `tj591://detail?id=${id}`;
+
+            // Detect user OS
+            const userAgent = navigator.userAgent || navigator.vendor || window.opera;
+            const isIOS = /iPad|iPhone|iPod/.test(userAgent) && !window.MSStream;
+            const isAndroid = /android/i.test(userAgent);
+
+            if (isIOS) {
+                document.getElementById('ios-section').style.display = 'block';
+                // Programmatic fallback trigger attempt (may be blocked, but user button remains)
+                window.location.href = `tw591://rentDetail?id=${id}`;
+            } else if (isAndroid) {
+                document.getElementById('android-section').style.display = 'block';
+                window.location.href = `tj591://rentDetail?id=${id}`;
+            } else {
+                // If desktop or other, show both but default to web
+                document.getElementById('ios-section').style.display = 'block';
+                document.getElementById('android-section').style.display = 'block';
+            }
         } else {
+            // No ID, go to web
             window.location.href = fallbackUrl;
         }
     </script>
