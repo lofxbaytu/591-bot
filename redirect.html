@@ -72,8 +72,15 @@
         .btn-outline:hover {
             background-color: #f8f9fa;
         }
-        .os-section {
-            display: none;
+        .section-title {
+            font-size: 12px;
+            color: #aaa;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin: 15px 0 5px;
+            text-align: left;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 3px;
         }
     </style>
 </head>
@@ -81,21 +88,18 @@
     <div class="container">
         <div class="logo">🏠</div>
         <h2>正在為您開啟 591 房源</h2>
-        <p>因手機瀏覽器限制，請點選下方按鈕直接喚起 591 App：</p>
+        <p>請點選下方按鈕嘗試喚起您手機中的 591 App：</p>
         
-        <!-- iOS Section -->
-        <div id="ios-section" class="os-section">
-            <a id="ios-btn-1" class="btn btn-primary" href="#">🍎 點此以 591 App 開啟 (推薦)</a>
-            <a id="ios-btn-2" class="btn btn-secondary" href="#">🍎 備用 App 開啟連結</a>
-        </div>
+        <div class="section-title">推薦方案 (Primary Schemes)</div>
+        <a id="btn-primary-1" class="btn btn-primary" href="#">📱 591 App 開啟 (方案一)</a>
+        <a id="btn-primary-2" class="btn btn-secondary" href="#">📱 591 App 開啟 (方案二)</a>
+        <a id="btn-primary-3" class="btn btn-secondary" href="#">📱 591 App 開啟 (方案三)</a>
 
-        <!-- Android Section -->
-        <div id="android-section" class="os-section">
-            <a id="android-btn-1" class="btn btn-primary" href="#">🤖 點此以 591 App 開啟 (推薦)</a>
-            <a id="android-btn-2" class="btn btn-secondary" href="#">🤖 備用 App 開啟連結</a>
-        </div>
+        <div id="os-fallback-title" class="section-title">系統專屬備用方案</div>
+        <a id="btn-fallback-1" class="btn btn-secondary" href="#">📱 系統備用連結一</a>
+        <a id="btn-fallback-2" class="btn btn-secondary" href="#">📱 系統備用連結二</a>
 
-        <!-- Common Fallback -->
+        <div class="section-title">網頁版</div>
         <a id="web-btn" class="btn btn-outline" href="#">🌐 前往 591 網頁版</a>
     </div>
 
@@ -108,31 +112,45 @@
         document.getElementById('web-btn').href = fallbackUrl;
 
         if (id) {
-            // Set href attributes for buttons
-            document.getElementById('ios-btn-1').href = `tw591://rentDetail?id=${id}`;
-            document.getElementById('ios-btn-2').href = `tw591://detail?id=${id}`;
-            document.getElementById('android-btn-1').href = `tj591://rentDetail?id=${id}`;
-            document.getElementById('android-btn-2').href = `tj591://detail?id=${id}`;
+            // Primary scheme is house591://
+            document.getElementById('btn-primary-1').href = `house591://rentDetail?id=${id}`;
+            document.getElementById('btn-primary-2').href = `house591://detail?id=${id}`;
+            document.getElementById('btn-primary-3').href = `house591://rent/detail?id=${id}`;
 
             // Detect user OS
             const userAgent = navigator.userAgent || navigator.vendor || window.opera;
             const isIOS = /iPad|iPhone|iPod/.test(userAgent) && !window.MSStream;
             const isAndroid = /android/i.test(userAgent);
 
+            const fallbackTitle = document.getElementById('os-fallback-title');
+            const fb1 = document.getElementById('btn-fallback-1');
+            const fb2 = document.getElementById('btn-fallback-2');
+
             if (isIOS) {
-                document.getElementById('ios-section').style.display = 'block';
-                // Programmatic fallback trigger attempt (may be blocked, but user button remains)
-                window.location.href = `tw591://rentDetail?id=${id}`;
+                fallbackTitle.textContent = "🍎 iOS 專屬備用方案";
+                fb1.href = `tw591://rentDetail?id=${id}`;
+                fb1.textContent = "🍎 tw591 連結一";
+                fb2.href = `tw591://detail?id=${id}`;
+                fb2.textContent = "🍎 tw591 連結二";
+                
+                // Attempt auto-trigger
+                window.location.href = `house591://rentDetail?id=${id}`;
             } else if (isAndroid) {
-                document.getElementById('android-section').style.display = 'block';
-                window.location.href = `tj591://rentDetail?id=${id}`;
+                fallbackTitle.textContent = "🤖 Android 專屬備用方案";
+                fb1.href = `tj591://rentDetail?id=${id}`;
+                fb1.textContent = "🤖 tj591 連結一";
+                fb2.href = `tj591://detail?id=${id}`;
+                fb2.textContent = "🤖 tj591 連結二";
+                
+                // Attempt auto-trigger
+                window.location.href = `house591://rentDetail?id=${id}`;
             } else {
-                // If desktop or other, show both but default to web
-                document.getElementById('ios-section').style.display = 'block';
-                document.getElementById('android-section').style.display = 'block';
+                // Desktop - hide fallbacks
+                fallbackTitle.style.display = 'none';
+                fb1.style.display = 'none';
+                fb2.style.display = 'none';
             }
         } else {
-            // No ID, go to web
             window.location.href = fallbackUrl;
         }
     </script>
