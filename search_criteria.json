@@ -13,7 +13,8 @@
         }
     ],
     "kinds": [
-        2
+        2,
+        1
     ],
     "not_cover": 1,
     "lift": 1,
@@ -23,5 +24,6 @@
     ],
     "min_area": 15,
     "floor_ratio_filter": 1,
+    "mrt_within_500": 1,
     "other_params": {}
 }
