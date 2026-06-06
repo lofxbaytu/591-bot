@@ -87,10 +87,10 @@
 <body>
     <div class="container">
         <div class="logo">🏠</div>
-        <h2>正在為您開啟 591 房源</h2>
-        <p>請點選下方按鈕嘗試喚起您手機中的 591 App：</p>
+        <h2>請選擇開啟方式</h2>
+        <p>請依序點選下方 App 按鈕測試喚起 591 App：</p>
         
-        <div class="section-title">推薦方案 (Primary Schemes)</div>
+        <div class="section-title">主要方案 (Primary Schemes)</div>
         <a id="btn-primary-1" class="btn btn-primary" href="#">📱 591 App 開啟 (方案一)</a>
         <a id="btn-primary-2" class="btn btn-secondary" href="#">📱 591 App 開啟 (方案二)</a>
         <a id="btn-primary-3" class="btn btn-secondary" href="#">📱 591 App 開啟 (方案三)</a>
@@ -132,18 +132,12 @@
                 fb1.textContent = "🍎 tw591 連結一";
                 fb2.href = `tw591://detail?id=${id}`;
                 fb2.textContent = "🍎 tw591 連結二";
-                
-                // Attempt auto-trigger
-                window.location.href = `house591://rentDetail?id=${id}`;
             } else if (isAndroid) {
                 fallbackTitle.textContent = "🤖 Android 專屬備用方案";
                 fb1.href = `tj591://rentDetail?id=${id}`;
                 fb1.textContent = "🤖 tj591 連結一";
                 fb2.href = `tj591://detail?id=${id}`;
                 fb2.textContent = "🤖 tj591 連結二";
-                
-                // Attempt auto-trigger
-                window.location.href = `house591://rentDetail?id=${id}`;
             } else {
                 // Desktop - hide fallbacks
                 fallbackTitle.style.display = 'none';
