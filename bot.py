@@ -301,7 +301,9 @@ def send_telegram_notification(token, chat_id, house_info):
     room_str = escape_html(house_info.get('room_str') or house_info.get('layout') or house_info.get('kind_name', '未提供格局'))
     floor_str = escape_html(house_info.get('floor_str') or house_info.get('floor') or '未提供樓層')
     
-    url = f"https://rent.591.com.tw/{post_id}"
+    url = f"https://rent.591.com.tw/rent-detail-{post_id}.html"
+    app_url_1 = f"house591://detail?id={post_id}"
+    app_url_2 = f"house591://rentDetail?id={post_id}"
     
     caption = (
         f"🏠 <b>發現新房源！</b>\n\n"
@@ -311,7 +313,9 @@ def send_telegram_notification(token, chat_id, house_info):
         f"🛏️ <b>格局：</b> {room_str}\n"
         f"🏢 <b>樓層：</b> {floor_str}\n"
         f"📍 <b>地點：</b> {location}\n\n"
-        f"🔗 <a href='{url}'>點此查看 591 房屋詳情</a>"
+        f"🔗 <a href='{url}'>點此開啟網頁版</a>\n"
+        f"📱 <a href='{app_url_1}'>點此以 591 App 開啟 (推薦)</a>\n"
+        f"📱 <a href='{app_url_2}'>備用 App 開啟連結</a>"
     )
     
     photo_url = house_info.get('cover')
