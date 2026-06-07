@@ -23,7 +23,7 @@
             border-radius: 12px;
             box-shadow: 0 4px 15px rgba(0,0,0,0.05);
             max-width: 90%;
-            width: 350px;
+            width: 320px;
         }
         .logo {
             font-size: 48px;
@@ -42,8 +42,8 @@
         }
         .btn {
             display: block;
-            margin: 10px 0;
-            padding: 12px;
+            margin: 15px 0;
+            padding: 14px;
             border-radius: 8px;
             text-decoration: none;
             font-weight: bold;
@@ -58,13 +58,6 @@
         .btn-primary:hover {
             background-color: #e65c00;
         }
-        .btn-secondary {
-            background-color: #e9ecef;
-            color: #495057;
-        }
-        .btn-secondary:hover {
-            background-color: #dee2e6;
-        }
         .btn-outline {
             border: 1px solid #ced4da;
             color: #6c757d;
@@ -72,39 +65,19 @@
         .btn-outline:hover {
             background-color: #f8f9fa;
         }
-        .section-title {
-            font-size: 12px;
-            color: #aaa;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            margin: 15px 0 5px;
-            text-align: left;
-            border-bottom: 1px solid #eee;
-            padding-bottom: 3px;
-        }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="logo">🏠</div>
         <h2>請選擇開啟方式</h2>
-        <p>請依序點選下方 App 按鈕測試喚起 591 App：</p>
+        <p>請點選下方按鈕直接喚起您手機中的 591 App：</p>
         
-        <div class="section-title">主要方案 (Primary Schemes)</div>
-        <a id="btn-primary-1" class="btn btn-primary" href="#">📱 591 App 開啟 (方案一)</a>
-        <a id="btn-primary-2" class="btn btn-secondary" href="#">📱 591 App 開啟 (方案二)</a>
-        <a id="btn-primary-3" class="btn btn-secondary" href="#">📱 591 App 開啟 (方案三)</a>
-
-        <div id="os-fallback-title" class="section-title">系統專屬備用方案</div>
-        <a id="btn-fallback-1" class="btn btn-secondary" href="#">📱 系統備用連結一</a>
-        <a id="btn-fallback-2" class="btn btn-secondary" href="#">📱 系統備用連結二</a>
-
-        <div class="section-title">網頁版</div>
+        <a id="app-btn" class="btn btn-primary" href="#">📱 點此開啟 591 App</a>
         <a id="web-btn" class="btn btn-outline" href="#">🌐 前往 591 網頁版</a>
     </div>
 
     <script>
-        // Parse parameters
         const urlParams = new URLSearchParams(window.location.search);
         const id = urlParams.get('id');
         
@@ -112,38 +85,23 @@
         document.getElementById('web-btn').href = fallbackUrl;
 
         if (id) {
-            // Primary scheme is house591://
-            document.getElementById('btn-primary-1').href = `house591://rentDetail?id=${id}`;
-            document.getElementById('btn-primary-2').href = `house591://detail?id=${id}`;
-            document.getElementById('btn-primary-3').href = `house591://rent/detail?id=${id}`;
-
-            // Detect user OS
+            // Detect user OS and assign the correct custom scheme
             const userAgent = navigator.userAgent || navigator.vendor || window.opera;
             const isIOS = /iPad|iPhone|iPod/.test(userAgent) && !window.MSStream;
             const isAndroid = /android/i.test(userAgent);
-
-            const fallbackTitle = document.getElementById('os-fallback-title');
-            const fb1 = document.getElementById('btn-fallback-1');
-            const fb2 = document.getElementById('btn-fallback-2');
-
+            
+            let appUrl = `house591://detail?id=${id}`; // fallback
+            
             if (isIOS) {
-                fallbackTitle.textContent = "🍎 iOS 專屬備用方案";
-                fb1.href = `tw591://rentDetail?id=${id}`;
-                fb1.textContent = "🍎 tw591 連結一";
-                fb2.href = `tw591://detail?id=${id}`;
-                fb2.textContent = "🍎 tw591 連結二";
+                appUrl = `tw591://rentDetail?id=${id}`;
             } else if (isAndroid) {
-                fallbackTitle.textContent = "🤖 Android 專屬備用方案";
-                fb1.href = `tj591://rentDetail?id=${id}`;
-                fb1.textContent = "🤖 tj591 連結一";
-                fb2.href = `tj591://detail?id=${id}`;
-                fb2.textContent = "🤖 tj591 連結二";
-            } else {
-                // Desktop - hide fallbacks
-                fallbackTitle.style.display = 'none';
-                fb1.style.display = 'none';
-                fb2.style.display = 'none';
+                appUrl = `tj591://rentDetail?id=${id}`;
             }
+            
+            document.getElementById('app-btn').href = appUrl;
+
+            // Attempt to auto-open on page load
+            window.location.href = appUrl;
         } else {
             window.location.href = fallbackUrl;
         }
