@@ -2,82 +2,131 @@
 <html>
 <head>
     <meta charset="utf-8">
-    <title>開啟 591 App</title>
+    <title>正在開啟 591 App...</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700&display=swap" rel="stylesheet">
     <style>
         body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            font-family: 'Outfit', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
             height: 100vh;
             margin: 0;
-            background-color: #f8f9fa;
-            color: #333;
+            background: linear-gradient(135deg, #fdfbf7 0%, #f5f7fa 100%);
+            color: #2c3e50;
         }
         .container {
             text-align: center;
-            padding: 30px;
-            background: white;
-            border-radius: 12px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+            padding: 40px 30px;
+            background: rgba(255, 255, 255, 0.9);
+            backdrop-filter: blur(10px);
+            border-radius: 24px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.04);
             max-width: 90%;
-            width: 320px;
+            width: 340px;
+            border: 1px solid rgba(255, 255, 255, 0.8);
+        }
+        .logo-box {
+            position: relative;
+            width: 80px;
+            height: 80px;
+            margin: 0 auto 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
         .logo {
             font-size: 48px;
-            margin-bottom: 15px;
+            z-index: 2;
+        }
+        .spinner {
+            position: absolute;
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            border: 3px solid rgba(255, 102, 0, 0.1);
+            border-top-color: #ff6600;
+            animation: spin 1s cubic-bezier(0.5, 0, 0.5, 1) infinite;
+            z-index: 1;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
         }
         h2 {
-            margin-top: 0;
-            color: #222;
-            font-size: 20px;
+            margin: 0 0 10px 0;
+            color: #1a1a1a;
+            font-size: 22px;
+            font-weight: 700;
         }
         p {
             font-size: 14px;
-            color: #666;
-            line-height: 1.5;
-            margin-bottom: 25px;
+            color: #6a737d;
+            line-height: 1.6;
+            margin: 0 0 30px 0;
         }
         .btn {
             display: block;
-            margin: 15px 0;
-            padding: 14px;
-            border-radius: 8px;
+            margin: 12px 0;
+            padding: 15px;
+            border-radius: 12px;
             text-decoration: none;
-            font-weight: bold;
-            font-size: 16px;
-            transition: background 0.2s;
+            font-weight: 600;
+            font-size: 15px;
+            transition: all 0.2s ease;
             text-align: center;
+            box-sizing: border-box;
         }
         .btn-primary {
             background-color: #ff6600;
             color: white;
+            box-shadow: 0 4px 15px rgba(255, 102, 0, 0.2);
         }
         .btn-primary:hover {
             background-color: #e65c00;
+            transform: translateY(-1px);
+            box-shadow: 0 6px 20px rgba(255, 102, 0, 0.3);
         }
         .btn-outline {
-            border: 1px solid #ced4da;
-            color: #6c757d;
+            border: 1px solid #e1e4e8;
+            color: #586069;
+            background: white;
         }
         .btn-outline:hover {
-            background-color: #f8f9fa;
+            background-color: #f6f8fa;
+            border-color: #d1d5da;
+            color: #24292e;
+        }
+        .footer-text {
+            font-size: 11px;
+            color: #959da5;
+            margin-top: 25px;
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <div class="logo">🏠</div>
-        <h2>請選擇開啟方式</h2>
-        <p>請點選下方按鈕直接喚起您手機中的 591 App：</p>
+        <div class="logo-box">
+            <div class="spinner"></div>
+            <div class="logo">🏠</div>
+        </div>
+        <h2>正在為您開啟 591 App</h2>
+        <p>我們正在引導您前往 591 手機 App。<br>若系統未自動轉跳，請使用下方按鈕。</p>
         
-        <a id="app-btn" class="btn btn-primary" href="#">📱 點此開啟 591 App</a>
+        <a id="app-btn" class="btn btn-primary" href="#">📱 點此手動開啟 App</a>
         <a id="web-btn" class="btn btn-outline" href="#">🌐 前往 591 網頁版</a>
+        
+        <div class="footer-text">
+            自動轉跳技術由 591 Telegram Bot 驅動
+        </div>
     </div>
 
     <script>
+        // Parse parameters
         const urlParams = new URLSearchParams(window.location.search);
         const id = urlParams.get('id');
         
@@ -85,25 +134,43 @@
         document.getElementById('web-btn').href = fallbackUrl;
 
         if (id) {
-            // Detect user OS and assign the correct custom scheme
+            // Detect user OS
             const userAgent = navigator.userAgent || navigator.vendor || window.opera;
             const isIOS = /iPad|iPhone|iPod/.test(userAgent) && !window.MSStream;
             const isAndroid = /android/i.test(userAgent);
             
-            let appUrl = `house591://detail?id=${id}`; // fallback
+            let targetUrl = fallbackUrl;
+            let schemeUrl = '';
             
             if (isIOS) {
-                appUrl = `tw591://rentDetail?id=${id}`;
+                schemeUrl = `tw591:///rent/detail?id=${id}`;
+                targetUrl = `https://m.591.com.tw/v2/other/toApp?action=${encodeURIComponent(schemeUrl)}`;
             } else if (isAndroid) {
-                appUrl = `tj591://rentDetail?id=${id}`;
+                schemeUrl = `tj591:///rent/detail?id=${id}`;
+                targetUrl = `https://m.591.com.tw/v2/other/toApp?action=${encodeURIComponent(schemeUrl)}`;
             }
             
-            document.getElementById('app-btn').href = appUrl;
-
-            // Attempt to auto-open on page load
-            window.location.href = appUrl;
+            // Set the manual button action URL
+            document.getElementById('app-btn').href = targetUrl || fallbackUrl;
+            
+            // Execute automatic redirection immediately
+            if (isIOS || isAndroid) {
+                window.location.replace(targetUrl);
+                
+                // Fallback to web version if redirect is blocked or app not installed
+                setTimeout(() => {
+                    // We only redirect to web if page is still focused (user hasn't switched to native app)
+                    if (!document.hidden) {
+                        window.location.replace(fallbackUrl);
+                    }
+                }, 3000);
+            } else {
+                // Desktop or other devices go straight to the web version
+                window.location.replace(fallbackUrl);
+            }
         } else {
-            window.location.href = fallbackUrl;
+            // No listing ID, go to homepage
+            window.location.replace(fallbackUrl);
         }
     </script>
 </body>
