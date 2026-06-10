@@ -2,7 +2,7 @@
 <html>
 <head>
     <meta charset="utf-8">
-    <title>591 App 開啟測試工具</title>
+    <title>正在開啟 591 App...</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -13,80 +13,83 @@
             display: flex;
             flex-direction: column;
             align-items: center;
-            justify-content: flex-start;
-            min-height: 100vh;
+            justify-content: center;
+            height: 100vh;
             margin: 0;
             background: linear-gradient(135deg, #fdfbf7 0%, #f5f7fa 100%);
             color: #2c3e50;
-            padding: 20px 10px;
-            box-sizing: border-box;
         }
         .container {
             text-align: center;
-            padding: 30px 20px;
+            padding: 40px 30px;
             background: rgba(255, 255, 255, 0.9);
             backdrop-filter: blur(10px);
             border-radius: 24px;
             box-shadow: 0 10px 30px rgba(0,0,0,0.04);
-            max-width: 100%;
-            width: 400px;
+            max-width: 90%;
+            width: 340px;
             border: 1px solid rgba(255, 255, 255, 0.8);
-            box-sizing: border-box;
         }
         .logo-box {
             position: relative;
-            width: 60px;
-            height: 60px;
-            margin: 0 auto 15px;
+            width: 80px;
+            height: 80px;
+            margin: 0 auto 24px;
             display: flex;
             align-items: center;
             justify-content: center;
         }
         .logo {
-            font-size: 36px;
+            font-size: 48px;
             z-index: 2;
+        }
+        .spinner {
+            position: absolute;
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            border: 3px solid rgba(255, 102, 0, 0.1);
+            border-top-color: #ff6600;
+            animation: spin 1s cubic-bezier(0.5, 0, 0.5, 1) infinite;
+            z-index: 1;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
         }
         h2 {
             margin: 0 0 10px 0;
             color: #1a1a1a;
-            font-size: 20px;
+            font-size: 22px;
             font-weight: 700;
         }
         p {
-            font-size: 13px;
+            font-size: 14px;
             color: #6a737d;
             line-height: 1.6;
-            margin: 0 0 20px 0;
-        }
-        .btn-group {
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-            margin-bottom: 20px;
+            margin: 0 0 30px 0;
         }
         .btn {
             display: block;
-            padding: 14px;
+            margin: 12px 0;
+            padding: 15px;
             border-radius: 12px;
             text-decoration: none;
             font-weight: 600;
-            font-size: 14px;
+            font-size: 15px;
             transition: all 0.2s ease;
             text-align: center;
             box-sizing: border-box;
         }
-        .btn-test {
+        .btn-primary {
             background-color: #ff6600;
             color: white;
-            box-shadow: 0 4px 12px rgba(255, 102, 0, 0.15);
+            box-shadow: 0 4px 15px rgba(255, 102, 0, 0.2);
         }
-        .btn-test:hover {
+        .btn-primary:hover {
             background-color: #e65c00;
             transform: translateY(-1px);
-            box-shadow: 0 6px 16px rgba(255, 102, 0, 0.25);
-        }
-        .btn-test:active {
-            transform: translateY(0);
+            box-shadow: 0 6px 20px rgba(255, 102, 0, 0.3);
         }
         .btn-outline {
             border: 1px solid #e1e4e8;
@@ -98,67 +101,27 @@
             border-color: #d1d5da;
             color: #24292e;
         }
-        .btn-desc {
-            font-size: 11px;
-            color: #888;
-            margin-top: -8px;
-            margin-bottom: 4px;
-            text-align: left;
-            padding-left: 5px;
-        }
         .footer-text {
             font-size: 11px;
             color: #959da5;
-            margin-top: 15px;
-        }
-        .info-box {
-            background-color: #f0f4f8;
-            border-radius: 12px;
-            padding: 12px;
-            font-size: 12px;
-            text-align: left;
-            margin-bottom: 15px;
-            border-left: 4px solid #3182ce;
+            margin-top: 25px;
         }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="logo-box">
-            <div class="logo">🛠️</div>
+            <div class="spinner"></div>
+            <div class="logo">🏠</div>
         </div>
-        <h2>591 App 開啟方案測試</h2>
-        <p>請在手機上測試以下方案，找出能成功開啟 591 App 並<b>直接導向房源詳情頁面</b>的選項，並在 Telegram 回報結果。</p>
+        <h2>正在為您開啟 591 App</h2>
+        <p>我們正在引導您前往 591 手機 App。<br>若系統未自動轉跳，請使用下方按鈕。</p>
         
-        <div class="info-box" id="info-id">
-            載入房源資訊中...
-        </div>
-
-        <div class="btn-group">
-            <!-- Option 1 -->
-            <a id="btn-opt1" class="btn btn-test" href="#">📱 方案 1 (官方動態連結 - 完整)</a>
-            <div class="btn-desc">使用 591 官方 link.591.com.tw 搭配完整的租屋詳情網頁路徑。</div>
-            
-            <!-- Option 2 -->
-            <a id="btn-opt2" class="btn btn-test" href="#">📱 方案 2 (官方動態連結 - 簡短)</a>
-            <div class="btn-desc">使用 591 官方 link.591.com.tw 搭配簡短的房源 ID 路徑。</div>
-            
-            <!-- Option 3 -->
-            <a id="btn-opt3" class="btn btn-test" href="#">📱 方案 3 (官方轉跳 - 雙斜線)</a>
-            <div class="btn-desc">使用 toApp 端點轉跳雙斜線協定 (tw591://rent/detail...)。</div>
-            
-            <!-- Option 4 -->
-            <a id="btn-opt4" class="btn btn-test" href="#">📱 方案 4 (官方轉跳 - 三斜線)</a>
-            <div class="btn-desc">使用 toApp 端點轉跳三斜線協定 (tw591:///rent/detail...)。</div>
-            
-            <hr style="border: 0; border-top: 1px solid #eee; margin: 10px 0;">
-            
-            <!-- Web Version -->
-            <a id="btn-web" class="btn btn-outline" href="#">🌐 前往 591 網頁版</a>
-        </div>
+        <a id="app-btn" class="btn btn-primary" href="#">📱 點此手動開啟 App</a>
+        <a id="web-btn" class="btn btn-outline" href="#">🌐 前往 591 網頁版</a>
         
         <div class="footer-text">
-            591 Telegram Bot 測試頁面
+            自動轉跳技術由 591 Telegram Bot 驅動
         </div>
     </div>
 
@@ -167,41 +130,39 @@
         const urlParams = new URLSearchParams(window.location.search);
         const id = urlParams.get('id');
         
+        const fallbackUrl = id ? `https://rent.591.com.tw/rent-detail-${id}.html` : 'https://rent.591.com.tw';
+        document.getElementById('web-btn').href = fallbackUrl;
+
         if (id) {
-            document.getElementById('info-id').innerHTML = `<b>當前測試房源 ID:</b> ${id}<br><b>偵測裝置:</b> ${navigator.userAgent.match(/iPhone|iPad|Android/i) || '電腦/其他'}`;
+            // Detect user OS
+            const userAgent = navigator.userAgent || navigator.vendor || window.opera;
+            const isIOS = /iPad|iPhone|iPod/.test(userAgent) && !window.MSStream;
+            const isAndroid = /android/i.test(userAgent);
             
-            // 1. Web Version Fallback URL
-            const webUrl = `https://rent.591.com.tw/rent-detail-${id}.html`;
-            document.getElementById('btn-web').href = webUrl;
+            // verified Option 2 URL
+            const targetUrl = `https://link.591.com.tw/?link=${encodeURIComponent(`https://rent.591.com.tw/${id}`)}`;
             
-            // 2. Option 1: Direct Dynamic Link (Long)
-            // https://link.591.com.tw/?link=https://rent.591.com.tw/rent-detail-ID.html
-            const opt1Url = `https://link.591.com.tw/?link=${encodeURIComponent(`https://rent.591.com.tw/rent-detail-${id}.html`)}`;
-            document.getElementById('btn-opt1').href = opt1Url;
+            // Set the manual button action URL
+            document.getElementById('app-btn').href = targetUrl;
             
-            // 3. Option 2: Direct Dynamic Link (Short)
-            // https://link.591.com.tw/?link=https://rent.591.com.tw/ID
-            const opt2Url = `https://link.591.com.tw/?link=${encodeURIComponent(`https://rent.591.com.tw/${id}`)}`;
-            document.getElementById('btn-opt2').href = opt2Url;
-            
-            // 4. Option 3: 2-Slash Custom Scheme via toApp
-            const scheme2 = `tw591://rent/detail?id=${id}`;
-            const opt3Url = `https://m.591.com.tw/v2/other/toApp?action=${encodeURIComponent(scheme2)}`;
-            document.getElementById('btn-opt3').href = opt3Url;
-            
-            // 5. Option 4: 3-Slash Custom Scheme via toApp
-            const scheme3 = `tw591:///rent/detail?id=${id}`;
-            const opt4Url = `https://m.591.com.tw/v2/other/toApp?action=${encodeURIComponent(scheme3)}`;
-            document.getElementById('btn-opt4').href = opt4Url;
-            
+            // Execute automatic redirection immediately on mobile devices
+            if (isIOS || isAndroid) {
+                window.location.replace(targetUrl);
+                
+                // Fallback to web version if redirect is blocked or app not installed
+                setTimeout(() => {
+                    // We only redirect to web if page is still focused (user hasn't switched to native app)
+                    if (!document.hidden) {
+                        window.location.replace(fallbackUrl);
+                    }
+                }, 3000);
+            } else {
+                // Desktop or other devices go straight to the web version
+                window.location.replace(fallbackUrl);
+            }
         } else {
-            document.getElementById('info-id').innerHTML = `⚠️ 無效的測試房源 ID`;
-            document.getElementById('btn-web').href = 'https://rent.591.com.tw';
-            
-            document.getElementById('btn-opt1').style.display = 'none';
-            document.getElementById('btn-opt2').style.display = 'none';
-            document.getElementById('btn-opt3').style.display = 'none';
-            document.getElementById('btn-opt4').style.display = 'none';
+            // No listing ID, go to homepage
+            window.location.replace(fallbackUrl);
         }
     </script>
 </body>
