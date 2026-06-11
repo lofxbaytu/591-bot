@@ -274,6 +274,33 @@ def check_mrt_constraint(surrounding, max_dist=500):
     except ValueError:
         return False
 
+def check_taoyuan_mrt(surrounding, max_dist=1000):
+    """
+    Checks if the listing has a surrounding subway station in Taoyuan 
+    matching Shanbi (山鼻) or Qingpu (高鐵桃園, 領航, 體育園區, 青埔) within max_dist meters.
+    """
+    if not surrounding or not isinstance(surrounding, dict):
+        return False
+        
+    if surrounding.get("type") != "subway_station":
+        return False
+        
+    desc = surrounding.get("desc", "")
+    valid_stations = ["山鼻", "高鐵桃園", "桃園高鐵", "領航", "體育園區", "青埔"]
+    if not any(st in desc for st in valid_stations):
+        return False
+        
+    dist_str = surrounding.get("distance", "")
+    match = re.search(r'(\d+)', dist_str)
+    if not match:
+        return False
+        
+    try:
+        dist_val = int(match.group(1))
+        return dist_val <= max_dist
+    except ValueError:
+        return False
+
 def send_telegram_notification(token, chat_id, house_info):
     """Sends notification to Telegram via Bot API, preferring photo format if available."""
     post_id = house_info.get('post_id') or house_info.get('id')
@@ -1197,11 +1224,19 @@ def main():
                                     continue
                                     
                         # 1.5 MRT distance filter
-                        if config.get("mrt_within_500", 1) == 1:
-                            surrounding = listing.get("surrounding")
-                            if not check_mrt_constraint(surrounding, max_dist=500):
-                                print(f"[!] Excluded listing {post_id} due to MRT distance/absence: {surrounding}")
+                        region_id_int = int(listing.get('region', 1))
+                        surrounding = listing.get("surrounding")
+                        if region_id_int == 6:
+                            # Taoyuan: Must be near Shanbi or Qingpu
+                            if not check_taoyuan_mrt(surrounding, max_dist=1000):
+                                print(f"[!] Excluded Taoyuan listing {post_id} because it is not near Shanbi/Qingpu: {surrounding}")
                                 continue
+                        else:
+                            # Other regions: standard MRT check if enabled
+                            if config.get("mrt_within_500", 1) == 1:
+                                if not check_mrt_constraint(surrounding, max_dist=500):
+                                    print(f"[!] Excluded listing {post_id} due to MRT distance/absence: {surrounding}")
+                                    continue
                                     
                         # 2. Fetch correct area and real address once
                         raw_area = listing.get('area', '0')

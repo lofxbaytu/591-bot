@@ -102,10 +102,15 @@ def main():
                     continue
                     
         # B. MRT distance filter
-        if config.get("mrt_within_500", 1) == 1:
-            surrounding = listing.get("surrounding")
-            if not bot.check_mrt_constraint(surrounding, max_dist=500):
+        surrounding = listing.get("surrounding")
+        region_id_int = int(listing.get('region', 1))
+        if region_id_int == 6:
+            if not bot.check_taoyuan_mrt(surrounding, max_dist=1000):
                 continue
+        else:
+            if config.get("mrt_within_500", 1) == 1:
+                if not bot.check_mrt_constraint(surrounding, max_dist=500):
+                    continue
                 
         # C. Fetch details for area and address verification
         raw_area = listing.get('area', '0')
