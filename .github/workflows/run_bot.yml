@@ -2,8 +2,8 @@ name: Run 591 Telegram Bot
 
 on:
   schedule:
-    # 每天 UTC 時間 12:00 執行一次 (即台北時間 20:00)
-    - cron: '0 12 * * *'
+    # 每 8 小時執行一次 (即台北時間 08:00, 16:00, 24:00)
+    - cron: '0 */8 * * *'
   workflow_dispatch: # 支援在 GitHub 網頁上手動點擊執行
 
 permissions:

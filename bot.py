@@ -382,6 +382,23 @@ def send_telegram_notification(token, chat_id, house_info):
         print(f"[ERROR] Failed to send Telegram message: {e}")
         return False
 
+def send_telegram_message(token, chat_id, text):
+    """Sends a plain text message to Telegram."""
+    base_url = f"https://api.telegram.org/bot{token}"
+    send_msg_url = f"{base_url}/sendMessage"
+    payload = {
+        "chat_id": chat_id,
+        "text": text,
+        "parse_mode": "HTML",
+        "disable_web_page_preview": True
+    }
+    try:
+        res = requests.post(send_msg_url, json=payload, timeout=10)
+        return res.status_code == 200
+    except Exception as e:
+        print(f"[ERROR] Failed to send Telegram message: {e}")
+        return False
+
 def get_591_listings(session, config, target):
     """Fetches the latest rental listings from 591 rsList API for a specific target."""
     region = target.get("region", 1)
@@ -1303,9 +1320,21 @@ def main():
                     is_first_run = False
                 else:
                     print(f"[{current_time}] Processed {new_listings_count} new listings.")
+                    if new_listings_count == 0:
+                        send_telegram_message(
+                            token=token,
+                            chat_id=chat_id,
+                            text="🔍 <b>系統更新通知</b>\n\n已完成最新房源掃描，目前沒有符合條件的新房源。"
+                        )
                     
             else:
                 print(f"[{current_time}] Failed to fetch listings or no listings returned.")
+                if not is_first_run:
+                    send_telegram_message(
+                        token=token,
+                        chat_id=chat_id,
+                        text="🔍 <b>系統更新通知</b>\n\n已完成最新房源掃描，目前沒有符合條件的新房源。"
+                    )
                 
             last_scrape_time = now
             
